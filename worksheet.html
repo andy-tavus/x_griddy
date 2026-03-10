@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Griddy — Worksheet</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 1rem 1.5rem;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 14px;
+      color: #111;
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    @media print {
+      body { padding: 0.5rem; }
+      .no-print { display: none; }
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin: 0 0 0.25rem;
+      font-weight: 700;
+    }
+    .sub {
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+
+    .grid-wrap {
+      margin: 1rem 0;
+      display: inline-block;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 2px;
+      border: 1px solid #000;
+      padding: 6px;
+    }
+    .cell {
+      width: 31px;
+      height: 31px;
+      border-radius: 50%;
+      border: 1px solid #000;
+    }
+
+    .directions {
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+      line-height: 1.4;
+    }
+    .directions strong { font-weight: 600; }
+
+    .name-line {
+      margin-bottom: 1rem;
+    }
+    .name-line span {
+      border-bottom: 1px solid #000;
+      display: inline-block;
+      min-width: 180px;
+    }
+    .blank-line {
+      border-bottom: 1px solid #000;
+      height: 1.75em;
+      margin-bottom: 0.5rem;
+    }
+    .lines { margin-top: 0.25rem; }
+    .instructions { margin-top: 1.25rem; }
+    .instructions h2 {
+      font-size: 1rem;
+      margin: 0 0 0.5rem;
+      font-weight: 600;
+    }
+    p { margin: 0 0 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>Griddy</h1>
+  <p class="sub">Program your path from Start to Goal.</p>
+
+  <p class="name-line">Name: <span></span></p>
+
+  <p class="directions">
+    You choose where <strong>Start</strong> and <strong>Goal</strong> are. Mark them on the grid below. Draw obstacles (dots you can’t cross). Then write instructions to get from Start to Goal using only North, South, East, or West. <strong>Rule: you must use all four directions</strong> (N, S, E, W) in your path to get around your obstacles. Example: <em>3 east</em>.
+  </p>
+
+  <div class="grid-wrap">
+    <p class="directions" style="margin-top:0;">Mark Start and Goal on the grid. Shade or X the obstacle dots.</p>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <div class="instructions">
+    <h2>My instructions</h2>
+    <div class="lines">
+      <div class="blank-line"></div>
+      <div class="blank-line"></div>
+      <div class="blank-line"></div>
+      <div class="blank-line"></div>
+      <div class="blank-line"></div>
+      <div class="blank-line"></div>
+      <div class="blank-line"></div>
+      <div class="blank-line"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var grid = document.getElementById('grid');
+      for (var r = 0; r < 10; r++) {
+        for (var c = 0; c < 10; c++) {
+          var cell = document.createElement('div');
+          cell.className = 'cell';
+          grid.appendChild(cell);
+        }
+      }
+    })();
+  </script>
+</body>
+</html>
