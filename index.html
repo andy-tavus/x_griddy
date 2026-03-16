@@ -903,11 +903,34 @@
     });
   }
 
+  function applyPastedImage(dataUrl) {
+    if (state.pasteTarget === 'char') {
+      state.charImage = dataUrl;
+      initEmojiPicks();
+      buildGrid();
+      syncCharacterToStart();
+    } else if (state.pasteTarget === 'goal') {
+      state.goalImage = dataUrl;
+      initEmojiPicks();
+      buildGrid();
+    } else if (state.pasteTarget === 'obstacle') {
+      state.pendingObstacleImage = dataUrl;
+      state.obstacleAnchor = null;
+      setPlaceMode('obstacle');
+      buildGrid();
+    }
+    setPasteHint(null, '');
+    state.pasteTarget = null;
+    var p = document.getElementById('pasteTargetInput');
+    if (p) p.blur();
+  }
+
   function handlePaste(e) {
     if (!state.pasteTarget) return;
     const dt = e.clipboardData;
     if (!dt) return;
     let blob = null;
+    let dataUrlFromHtml = null;
     if (dt.items) {
       for (let i = 0; i < dt.items.length; i++) {
         const item = dt.items[i];
@@ -925,33 +948,27 @@
         }
       }
     }
-    if (!blob) return;
+    if (!blob && dt.types && dt.types.indexOf('text/html') !== -1) {
+      var html = dt.getData('text/html');
+      if (html) {
+        var match = html.match(/<img[^>]+src\s*=\s*[\"'](data:image\/[^\"']+)[\"']/i);
+        if (match) dataUrlFromHtml = match[1];
+      }
+    }
+    if (!blob && !dataUrlFromHtml) return;
     e.preventDefault();
     e.stopPropagation();
     setPasteHint(state.pasteTarget, '…');
     (async () => {
       try {
-        const raw = await blobToDataURL(blob);
-        const dataUrl = await downscaleDataURL(raw, IMAGE_MAX_SIDE);
-        if (state.pasteTarget === 'char') {
-          state.charImage = dataUrl;
-          initEmojiPicks();
-          buildGrid();
-          syncCharacterToStart();
-        } else if (state.pasteTarget === 'goal') {
-          state.goalImage = dataUrl;
-          initEmojiPicks();
-          buildGrid();
-        } else if (state.pasteTarget === 'obstacle') {
-          state.pendingObstacleImage = dataUrl;
-          state.obstacleAnchor = null;
-          setPlaceMode('obstacle');
-          buildGrid();
+        var dataUrl;
+        if (dataUrlFromHtml) {
+          dataUrl = await downscaleDataURL(dataUrlFromHtml, IMAGE_MAX_SIDE);
+        } else {
+          var raw = await blobToDataURL(blob);
+          dataUrl = await downscaleDataURL(raw, IMAGE_MAX_SIDE);
         }
-        setPasteHint(null, '');
-        state.pasteTarget = null;
-        var p = document.getElementById('pasteTargetInput');
-        if (p) p.blur();
+        applyPastedImage(dataUrl);
       } catch (err) {
         setPasteHint(null, '');
         state.pasteTarget = null;
@@ -1095,8 +1112,27 @@
   const pasteTargetInput = document.getElementById('pasteTargetInput');
   ['char', 'goal', 'obstacle'].forEach(target => {
     const btn = document.getElementById(target + 'PasteBtn');
-    if (btn) btn.addEventListener('click', () => {
+    if (btn) btn.addEventListener('click', async () => {
       state.pasteTarget = target;
+      setPasteHint(target, '…');
+      try {
+        if (navigator.clipboard && navigator.clipboard.read) {
+          var items = await navigator.clipboard.read();
+          for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            var types = item.types || [];
+            for (var t = 0; t < types.length; t++) {
+              if (types[t].indexOf('image') !== -1) {
+                var blob = await item.getType(types[t]);
+                var raw = await blobToDataURL(blob);
+                var dataUrl = await downscaleDataURL(raw, IMAGE_MAX_SIDE);
+                applyPastedImage(dataUrl);
+                return;
+              }
+            }
+          }
+        }
+      } catch (e) { /* clipboard read not allowed or no image */ }
       setPasteHint(target, 'Paste now (Ctrl+V)');
       if (pasteTargetInput) {
         pasteTargetInput.value = '';
