@@ -37,8 +37,7 @@
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(10, 31px);
-      grid-template-rows: repeat(10, 31px);
+      grid-template-columns: repeat(10, 1fr);
       gap: 2px;
       border: 1px solid #000;
       padding: 6px;
@@ -46,8 +45,6 @@
     .cell {
       width: 31px;
       height: 31px;
-      min-width: 31px;
-      min-height: 31px;
       border-radius: 50%;
       border: 1px solid #000;
     }
@@ -113,21 +110,13 @@
 
   <script>
     (function () {
-      function fillGrid() {
-        var grid = document.getElementById('grid');
-        if (!grid) return;
-        for (var r = 0; r < 10; r++) {
-          for (var c = 0; c < 10; c++) {
-            var cell = document.createElement('div');
-            cell.className = 'cell';
-            grid.appendChild(cell);
-          }
+      var grid = document.getElementById('grid');
+      for (var r = 0; r < 10; r++) {
+        for (var c = 0; c < 10; c++) {
+          var cell = document.createElement('div');
+          cell.className = 'cell';
+          grid.appendChild(cell);
         }
-      }
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', fillGrid);
-      } else {
-        fillGrid();
       }
     })();
   </script>

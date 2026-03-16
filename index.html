@@ -279,6 +279,7 @@
     .image-upload-row input[type="file"] { font-size: 0.8rem; max-width: 100%; }
     .image-upload-row .btn { margin-top: 0; padding: 0.4rem 0.65rem; font-size: 0.8rem; }
     .paste-hint { font-size: 0.8rem; color: var(--accent); margin-left: 0.35rem; }
+    #pasteTargetInput { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .setup-image-block { margin-bottom: 0.75rem; }
     .setup-image-block > label:first-child { font-weight: 600; color: var(--text); }
     .fallback-row { margin-top: 0.35rem; }
@@ -384,6 +385,8 @@
       </div>
     </div>
   </div>
+
+  <input type="text" id="pasteTargetInput" tabindex="-1" aria-hidden="true" />
 
   <div class="overlay" id="overlay" style="display: none;">
     <div class="overlay-card" id="overlayCard">
@@ -902,17 +905,29 @@
 
   function handlePaste(e) {
     if (!state.pasteTarget) return;
-    const items = e.clipboardData && e.clipboardData.items;
-    if (!items) return;
+    const dt = e.clipboardData;
+    if (!dt) return;
     let blob = null;
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.indexOf('image') !== -1) {
-        blob = items[i].getAsFile();
-        break;
+    if (dt.items) {
+      for (let i = 0; i < dt.items.length; i++) {
+        const item = dt.items[i];
+        if (item.kind === 'file' && item.type.indexOf('image') !== -1) {
+          blob = item.getAsFile();
+          break;
+        }
+      }
+    }
+    if (!blob && dt.files && dt.files.length > 0) {
+      for (let i = 0; i < dt.files.length; i++) {
+        if (dt.files[i].type.indexOf('image') !== -1) {
+          blob = dt.files[i];
+          break;
+        }
       }
     }
     if (!blob) return;
     e.preventDefault();
+    e.stopPropagation();
     setPasteHint(state.pasteTarget, '…');
     (async () => {
       try {
@@ -935,15 +950,19 @@
         }
         setPasteHint(null, '');
         state.pasteTarget = null;
+        var p = document.getElementById('pasteTargetInput');
+        if (p) p.blur();
       } catch (err) {
         setPasteHint(null, '');
         state.pasteTarget = null;
+        var p = document.getElementById('pasteTargetInput');
+        if (p) p.blur();
         alert('Could not use pasted image.');
       }
     })();
   }
 
-  document.addEventListener('paste', handlePaste);
+  document.addEventListener('paste', handlePaste, true);
 
   function attachImageInput(inputId, clearId, stateKey, afterSet) {
     const input = document.getElementById(inputId);
@@ -1073,11 +1092,16 @@
   attachPendingObstacleImageInput();
   attachImageInput('goalImageInput', 'goalImageClear', 'goalImage', () => initEmojiPicks());
 
+  const pasteTargetInput = document.getElementById('pasteTargetInput');
   ['char', 'goal', 'obstacle'].forEach(target => {
     const btn = document.getElementById(target + 'PasteBtn');
     if (btn) btn.addEventListener('click', () => {
       state.pasteTarget = target;
       setPasteHint(target, 'Paste now (Ctrl+V)');
+      if (pasteTargetInput) {
+        pasteTargetInput.value = '';
+        pasteTargetInput.focus();
+      }
     });
   });
   setPlaceMode('start');
