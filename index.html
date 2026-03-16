@@ -278,6 +278,7 @@
     }
     .image-upload-row input[type="file"] { font-size: 0.8rem; max-width: 100%; }
     .image-upload-row .btn { margin-top: 0; padding: 0.4rem 0.65rem; font-size: 0.8rem; }
+    .paste-hint { font-size: 0.8rem; color: var(--accent); margin-left: 0.35rem; }
     .setup-image-block { margin-bottom: 0.75rem; }
     .setup-image-block > label:first-child { font-weight: 600; color: var(--text); }
     .fallback-row { margin-top: 0.35rem; }
@@ -316,7 +317,9 @@
           <label>Character</label>
           <div class="image-upload-row">
             <input type="file" id="charImageInput" accept="image/*" />
+            <button type="button" class="btn btn-secondary" id="charPasteBtn">Paste</button>
             <button type="button" class="btn btn-secondary" id="charImageClear">Use fallback</button>
+            <span class="paste-hint" id="charPasteHint"></span>
           </div>
           <div class="fallback-row">
             <label>Fallback (no image)</label>
@@ -327,7 +330,9 @@
           <label>Goal</label>
           <div class="image-upload-row">
             <input type="file" id="goalImageInput" accept="image/*" />
+            <button type="button" class="btn btn-secondary" id="goalPasteBtn">Paste</button>
             <button type="button" class="btn btn-secondary" id="goalImageClear">Use fallback</button>
+            <span class="paste-hint" id="goalPasteHint"></span>
           </div>
           <div class="fallback-row">
             <label>Fallback (no image)</label>
@@ -338,7 +343,9 @@
           <label>Obstacle</label>
           <div class="image-upload-row">
             <input type="file" id="obstacleImageInput" accept="image/*" />
+            <button type="button" class="btn btn-secondary" id="obstaclePasteBtn">Paste</button>
             <button type="button" class="btn btn-secondary" id="obstacleImageClear">Cancel</button>
+            <span class="paste-hint" id="obstaclePasteHint"></span>
           </div>
           <p class="hint" style="margin-top:0.35rem;">With image loaded: <strong>Obstacle</strong> → two clicks for size. No image: one click = one fallback dot.</p>
           <div class="fallback-row">
@@ -411,6 +418,7 @@
     obstacleEmoji: '🪨',
     obstacleAnchor: null, // first click when placing image rectangle
     pendingObstacleImage: null, // next rectangle uses this; each region keeps its own copy
+    pasteTarget: null // 'char' | 'goal' | 'obstacle' — next paste goes here (e.g. from Google Doc)
     charEmoji: '🤖',
     goalEmoji: '🏁',
     // data URLs from local files — no server, no hotlink/CORS issues
@@ -876,6 +884,67 @@
     return downscaleDataURL(raw, IMAGE_MAX_SIDE);
   }
 
+  function blobToDataURL(blob) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(blob);
+    });
+  }
+
+  function setPasteHint(target, msg) {
+    ['char', 'goal', 'obstacle'].forEach(t => {
+      const el = document.getElementById(t + 'PasteHint');
+      if (el) el.textContent = target === t ? (msg || '') : '';
+    });
+  }
+
+  function handlePaste(e) {
+    if (!state.pasteTarget) return;
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    let blob = null;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        blob = items[i].getAsFile();
+        break;
+      }
+    }
+    if (!blob) return;
+    e.preventDefault();
+    setPasteHint(state.pasteTarget, '…');
+    (async () => {
+      try {
+        const raw = await blobToDataURL(blob);
+        const dataUrl = await downscaleDataURL(raw, IMAGE_MAX_SIDE);
+        if (state.pasteTarget === 'char') {
+          state.charImage = dataUrl;
+          initEmojiPicks();
+          buildGrid();
+          syncCharacterToStart();
+        } else if (state.pasteTarget === 'goal') {
+          state.goalImage = dataUrl;
+          initEmojiPicks();
+          buildGrid();
+        } else if (state.pasteTarget === 'obstacle') {
+          state.pendingObstacleImage = dataUrl;
+          state.obstacleAnchor = null;
+          setPlaceMode('obstacle');
+          buildGrid();
+        }
+        setPasteHint(null, '');
+        state.pasteTarget = null;
+      } catch (err) {
+        setPasteHint(null, '');
+        state.pasteTarget = null;
+        alert('Could not use pasted image.');
+      }
+    })();
+  }
+
+  document.addEventListener('paste', handlePaste);
+
   function attachImageInput(inputId, clearId, stateKey, afterSet) {
     const input = document.getElementById(inputId);
     const clearBtn = document.getElementById(clearId);
@@ -1003,6 +1072,14 @@
   attachImageInput('charImageInput', 'charImageClear', 'charImage', () => initEmojiPicks());
   attachPendingObstacleImageInput();
   attachImageInput('goalImageInput', 'goalImageClear', 'goalImage', () => initEmojiPicks());
+
+  ['char', 'goal', 'obstacle'].forEach(target => {
+    const btn = document.getElementById(target + 'PasteBtn');
+    if (btn) btn.addEventListener('click', () => {
+      state.pasteTarget = target;
+      setPasteHint(target, 'Paste now (Ctrl+V)');
+    });
+  });
   setPlaceMode('start');
   buildGrid();
 

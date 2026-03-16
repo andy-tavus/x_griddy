@@ -11,4 +11,4 @@ Open `index.html` in a browser — no server.
 
 ## Images
 
-Save from image search → **Choose file**. Stored in-page (data URL); no URLs from the web. Big uploads are auto-downscaled. Obstacle image: **Obstacle** mode → two clicks = rectangle.
+**File:** Choose file (if your device allows saving images locally). **Paste (Chromebooks):** Put an image in a Google Doc → right‑click → Copy. In Griddy click **Paste** next to Character, Goal, or Obstacle, then press **Ctrl+V**. Image is stored in-page and downscaled. Obstacle image: **Obstacle** mode → two clicks = rectangle.
