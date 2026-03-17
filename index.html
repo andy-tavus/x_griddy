@@ -308,6 +308,13 @@
     .checkbox-label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; }
     .checkbox-label input[type="checkbox"] { margin: 0; }
 
+    .setup-tabs { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.75rem; border-bottom: 1px solid #3b4261; }
+    .setup-tab { padding: 0.4rem 0.75rem; font-size: 0.85rem; font-weight: 600; border: none; border-radius: 8px 8px 0 0; background: transparent; color: var(--muted); cursor: pointer; margin: 0; }
+    .setup-tab:hover { color: var(--text); background: rgba(122, 162, 247, 0.15); }
+    .setup-tab.active { background: var(--panel); color: var(--accent); border: 1px solid #3b4261; border-bottom-color: var(--panel); margin-bottom: -1px; }
+    .tab-panel { display: none; padding-top: 0.25rem; }
+    .tab-panel.active { display: block; }
+
     @media (max-width: 700px) {
       .cell { width: 28px; height: 28px; font-size: 0.95rem; }
       .character { width: 28px; height: 28px; font-size: 1.2rem; }
@@ -327,22 +334,32 @@
       <span class="mode-badge mode-setup" id="modeBadge">SETUP</span>
       <div id="setupSection">
         <h2>Setup</h2>
-        <div class="row">
-          <label>Challenge title</label>
-          <input type="text" id="titleInput" placeholder="My maze" value="Griddy" />
+        <div class="setup-tabs" role="tablist">
+          <button type="button" class="setup-tab active" role="tab" id="tabDetails" aria-selected="true" data-tab="details">Details</button>
+          <button type="button" class="setup-tab" role="tab" id="tabCharacter" aria-selected="false" data-tab="character">Character</button>
+          <button type="button" class="setup-tab" role="tab" id="tabGoal" aria-selected="false" data-tab="goal">Goal</button>
+          <button type="button" class="setup-tab" role="tab" id="tabObstacles" aria-selected="false" data-tab="obstacles">Obstacles</button>
         </div>
-        <div class="row">
-          <label>Background</label>
-          <input type="color" id="bgColorInput" value="#1a1b26" />
+        <div id="panelDetails" class="tab-panel active" role="tabpanel">
+          <div class="row">
+            <label>Challenge title</label>
+            <input type="text" id="titleInput" placeholder="My maze" value="Griddy" />
+          </div>
+          <div class="row">
+            <label>Background</label>
+            <input type="color" id="bgColorInput" value="#1a1b26" />
+          </div>
+          <div class="row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="showFileChooser" />
+              Show file chooser
+            </label>
+          </div>
+          <p class="hint">Then use Character, Goal, and Obstacles tabs to choose images and place on the grid. Green = start, pink = goal.</p>
         </div>
-        <div class="row">
-          <label class="checkbox-label">
-            <input type="checkbox" id="showFileChooser" />
-            Show file chooser
-          </label>
-        </div>
-        <div class="setup-image-block">
-          <label>Character</label>
+        <div id="panelCharacter" class="tab-panel" role="tabpanel">
+          <div class="setup-image-block">
+            <label>Character</label>
           <div class="image-upload-row">
             <span class="file-chooser-only"><input type="file" id="charImageInput" accept="image/*" /></span>
             <button type="button" class="btn btn-secondary" id="charPasteBtn">Paste</button>
@@ -353,22 +370,36 @@
             <label>Choose</label>
             <div class="choice-row" id="charChoiceRow"></div>
           </div>
-        </div>
-        <div class="setup-image-block">
-          <label>Goal</label>
-          <div class="image-upload-row">
-            <span class="file-chooser-only"><input type="file" id="goalImageInput" accept="image/*" /></span>
-            <button type="button" class="btn btn-secondary" id="goalPasteBtn">Paste</button>
-            <button type="button" class="btn btn-secondary" id="goalImageClear">Use fallback</button>
-            <span class="paste-hint" id="goalPasteHint"></span>
           </div>
-          <div class="fallback-row">
-            <label>Choose</label>
-            <div class="choice-row" id="goalChoiceRow"></div>
+          <div class="row">
+            <label>Place on grid</label>
+            <button type="button" class="btn btn-secondary" id="placeStartBtn" style="margin:0;">Set start</button>
           </div>
+          <p class="hint">Click the button, then click a dot to set the start (green ring).</p>
         </div>
-        <div class="setup-image-block">
-          <label>Obstacle</label>
+        <div id="panelGoal" class="tab-panel" role="tabpanel">
+          <div class="setup-image-block">
+            <label>Goal</label>
+            <div class="image-upload-row">
+              <span class="file-chooser-only"><input type="file" id="goalImageInput" accept="image/*" /></span>
+              <button type="button" class="btn btn-secondary" id="goalPasteBtn">Paste</button>
+              <button type="button" class="btn btn-secondary" id="goalImageClear">Use fallback</button>
+              <span class="paste-hint" id="goalPasteHint"></span>
+            </div>
+            <div class="fallback-row">
+              <label>Choose</label>
+              <div class="choice-row" id="goalChoiceRow"></div>
+            </div>
+          </div>
+          <div class="row">
+            <label>Place on grid</label>
+            <button type="button" class="btn btn-secondary" id="placeGoalBtn" style="margin:0;">Set goal</button>
+          </div>
+          <p class="hint">Click the button, then click a dot to set the goal (pink ring).</p>
+        </div>
+        <div id="panelObstacles" class="tab-panel" role="tabpanel">
+          <div class="setup-image-block">
+            <label>Obstacle</label>
           <div class="image-upload-row">
             <span class="file-chooser-only">
               <input type="file" id="obstacleImageInput0" accept="image/*" />
@@ -378,23 +409,22 @@
             <button type="button" class="btn btn-secondary" id="obstaclePasteBtn">Paste</button>
             <span class="paste-hint" id="obstaclePasteHint"></span>
           </div>
-          <p class="hint" style="margin-top:0.35rem;">With image loaded: <strong>Obstacle</strong> → two clicks for size. No image: one click = one fallback dot.</p>
+          <p class="hint" style="margin-top:0.35rem;">Image: two clicks on grid = rectangle. Fallback: one click = one dot.</p>
           <div class="fallback-row">
             <label>Choose (fallback + 3 slots)</label>
             <div class="choice-row" id="obstacleChoiceRow"></div>
           </div>
         </div>
         <div class="row">
-          <label>Click grid to place</label>
+          <label>Place on grid</label>
           <div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
-            <button type="button" class="btn btn-secondary" id="placeStartBtn" style="margin:0;">Start</button>
-            <button type="button" class="btn btn-secondary" id="placeGoalBtn" style="margin:0;">Goal</button>
-            <button type="button" class="btn btn-secondary" id="placeObstacleBtn" style="margin:0;">Obstacle</button>
-            <button type="button" class="btn btn-secondary" id="clearObstacleBtn" style="margin:0;">Erase obstacle</button>
+            <button type="button" class="btn btn-secondary" id="placeObstacleBtn" style="margin:0;">Place obstacle</button>
+            <button type="button" class="btn btn-secondary" id="clearObstacleBtn" style="margin:0;">Erase</button>
           </div>
         </div>
-        <p class="hint">Green start, pink goal. Erase removes what’s under the click.</p>
-        <button type="button" class="btn btn-primary" id="doneSetupBtn">DONE SETUP</button>
+        <p class="hint">Click Place obstacle, then click the grid. Erase removes what’s under the click.</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="doneSetupBtn" style="margin-top:0.75rem;">DONE SETUP</button>
       </div>
 
       <div id="playSection" style="display: none;">
@@ -1259,6 +1289,20 @@
   document.body.style.background = state.bg;
   var showFileChooser = document.getElementById('showFileChooser');
   if (showFileChooser) showFileChooser.addEventListener('change', function () { document.body.classList.toggle('show-file-chooser', this.checked); });
+  function switchSetupTab(tabId) {
+    ['details', 'character', 'goal', 'obstacles'].forEach(function (id) {
+      var tab = document.getElementById('tab' + id.charAt(0).toUpperCase() + id.slice(1));
+      var panel = document.getElementById('panel' + id.charAt(0).toUpperCase() + id.slice(1));
+      if (tab) { tab.classList.toggle('active', id === tabId); tab.setAttribute('aria-selected', id === tabId ? 'true' : 'false'); }
+      if (panel) panel.classList.toggle('active', id === tabId);
+    });
+  }
+  document.querySelectorAll('.setup-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var t = this.getAttribute('data-tab');
+      if (t) switchSetupTab(t);
+    });
+  });
   buildChoiceRows();
   attachImageInput('charImageInput', 'charImageClear', 'charImage', () => buildChoiceRows());
   attachObstacleImageInputs();
