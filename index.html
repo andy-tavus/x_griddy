@@ -264,6 +264,7 @@
     .choice-row > button.fallback-btn.selected { border-color: #7aa2f7; }
     .choice-row .slot-add { width: 40px; height: 40px; border-radius: 8px; border: 2px dashed #565f89; background: #1a1b26; color: var(--muted); font-size: 1.25rem; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .choice-row .slot-add:hover { border-color: var(--accent); color: var(--accent); }
+    .choice-row .slot-add.selected { border-color: var(--accent); color: var(--accent); }
 
     /* Images inside dots / character (data URLs — no external fetch) */
     .cell img, .character img, #overlayEmoji img {
@@ -298,6 +299,10 @@
     .fallback-row label { font-size: 0.75rem; }
     .overlay-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-top: 1rem; }
     .overlay-actions .btn { margin: 0; }
+    .file-chooser-only { display: none; }
+    body.show-file-chooser .file-chooser-only { display: inline-block; }
+    .checkbox-label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; }
+    .checkbox-label input[type="checkbox"] { margin: 0; }
 
     @media (max-width: 700px) {
       .cell { width: 28px; height: 28px; font-size: 0.95rem; }
@@ -326,10 +331,16 @@
           <label>Background</label>
           <input type="color" id="bgColorInput" value="#1a1b26" />
         </div>
+        <div class="row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="showFileChooser" />
+            Show file chooser
+          </label>
+        </div>
         <div class="setup-image-block">
           <label>Character</label>
           <div class="image-upload-row">
-            <input type="file" id="charImageInput" accept="image/*" />
+            <span class="file-chooser-only"><input type="file" id="charImageInput" accept="image/*" /></span>
             <button type="button" class="btn btn-secondary" id="charPasteBtn">Paste</button>
             <button type="button" class="btn btn-secondary" id="charImageClear">Use fallback</button>
             <span class="paste-hint" id="charPasteHint"></span>
@@ -342,7 +353,7 @@
         <div class="setup-image-block">
           <label>Goal</label>
           <div class="image-upload-row">
-            <input type="file" id="goalImageInput" accept="image/*" />
+            <span class="file-chooser-only"><input type="file" id="goalImageInput" accept="image/*" /></span>
             <button type="button" class="btn btn-secondary" id="goalPasteBtn">Paste</button>
             <button type="button" class="btn btn-secondary" id="goalImageClear">Use fallback</button>
             <span class="paste-hint" id="goalPasteHint"></span>
@@ -355,9 +366,11 @@
         <div class="setup-image-block">
           <label>Obstacle</label>
           <div class="image-upload-row">
-            <input type="file" id="obstacleImageInput0" accept="image/*" />
-            <input type="file" id="obstacleImageInput1" accept="image/*" />
-            <input type="file" id="obstacleImageInput2" accept="image/*" />
+            <span class="file-chooser-only">
+              <input type="file" id="obstacleImageInput0" accept="image/*" />
+              <input type="file" id="obstacleImageInput1" accept="image/*" />
+              <input type="file" id="obstacleImageInput2" accept="image/*" />
+            </span>
             <button type="button" class="btn btn-secondary" id="obstaclePasteBtn">Paste</button>
             <span class="paste-hint" id="obstaclePasteHint"></span>
           </div>
@@ -434,7 +447,8 @@
     obstacleEmoji: '🚧',
     obstacleAnchor: null, // first click when placing image rectangle
     pendingObstacleImage: null, // next rectangle uses this; each region keeps its own copy
-    pasteTarget: null, // 'char' | 'goal' | 'obstacle' — next paste goes here (e.g. from Google Doc)
+    pasteTarget: null, // 'char' | 'goal' | 'obstacle'
+    pasteTargetSlot: null, // for obstacle: 0, 1, or 2 when pasting into a slot
     charEmoji: '🤖',
     goalEmoji: '🏁',
     // data URLs from local files — no server, no hotlink/CORS issues
@@ -935,10 +949,12 @@
       var arr = state.obstacleInsertedImages;
       if (!Array.isArray(arr) || arr.length !== 3) state.obstacleInsertedImages = [null, null, null];
       arr = state.obstacleInsertedImages;
-      var slot = arr.indexOf(null);
+      var slot = state.pasteTargetSlot;
+      if (slot == null || slot < 0 || slot > 2) slot = arr.indexOf(null);
       if (slot === -1) slot = 0;
       arr[slot] = dataUrl;
       state.pendingObstacleImage = dataUrl;
+      state.pasteTargetSlot = null;
       state.obstacleAnchor = null;
       setPlaceMode('obstacle');
       buildChoiceRows();
@@ -946,6 +962,7 @@
     }
     setPasteHint(null, '');
     state.pasteTarget = null;
+    state.pasteTargetSlot = null;
     var p = document.getElementById('pasteTargetInput');
     if (p) p.blur();
   }
@@ -997,6 +1014,7 @@
       } catch (err) {
         setPasteHint(null, '');
         state.pasteTarget = null;
+        state.pasteTargetSlot = null;
         var p = document.getElementById('pasteTargetInput');
         if (p) p.blur();
         alert('Could not use pasted image.');
@@ -1122,12 +1140,16 @@
           } else {
             var addBtn = document.createElement('button');
             addBtn.type = 'button';
-            addBtn.className = 'slot-add';
+            addBtn.className = 'slot-add' + (state.pasteTarget === 'obstacle' && state.pasteTargetSlot === idx ? ' selected' : '');
             addBtn.textContent = '+';
-            addBtn.title = 'Add image to slot ' + (idx + 1);
+            addBtn.title = 'Click then paste (Ctrl+V) to add image to slot ' + (idx + 1);
             addBtn.addEventListener('click', function () {
-              var inp = document.getElementById('obstacleImageInput' + idx);
-              if (inp) inp.click();
+              state.pasteTarget = 'obstacle';
+              state.pasteTargetSlot = idx;
+              setPasteHint('obstacle', 'Paste now (Ctrl+V)');
+              var pi = document.getElementById('pasteTargetInput');
+              if (pi) { pi.value = ''; pi.focus(); }
+              buildChoiceRows();
             });
             el.obstacleChoiceRow.appendChild(addBtn);
           }
@@ -1184,6 +1206,8 @@
   document.getElementById('clearObstacleBtn').addEventListener('click', () => setPlaceMode('erase'));
 
   document.body.style.background = state.bg;
+  var showFileChooser = document.getElementById('showFileChooser');
+  if (showFileChooser) showFileChooser.addEventListener('change', function () { document.body.classList.toggle('show-file-chooser', this.checked); });
   buildChoiceRows();
   attachImageInput('charImageInput', 'charImageClear', 'charImage', () => buildChoiceRows());
   attachObstacleImageInputs();
