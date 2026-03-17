@@ -262,6 +262,8 @@
     .choice-row .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
     .choice-row > button.fallback-btn { width: 40px; height: 40px; font-size: 1.25rem; border: 2px solid transparent; border-radius: 8px; background: #1a1b26; cursor: pointer; }
     .choice-row > button.fallback-btn.selected { border-color: #7aa2f7; }
+    .choice-row .slot-add { width: 40px; height: 40px; border-radius: 8px; border: 2px dashed #565f89; background: #1a1b26; color: var(--muted); font-size: 1.25rem; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .choice-row .slot-add:hover { border-color: var(--accent); color: var(--accent); }
 
     /* Images inside dots / character (data URLs — no external fetch) */
     .cell img, .character img, #overlayEmoji img {
@@ -353,14 +355,15 @@
         <div class="setup-image-block">
           <label>Obstacle</label>
           <div class="image-upload-row">
-            <input type="file" id="obstacleImageInput" accept="image/*" />
+            <input type="file" id="obstacleImageInput0" accept="image/*" />
+            <input type="file" id="obstacleImageInput1" accept="image/*" />
+            <input type="file" id="obstacleImageInput2" accept="image/*" />
             <button type="button" class="btn btn-secondary" id="obstaclePasteBtn">Paste</button>
-            <button type="button" class="btn btn-secondary" id="obstacleImageClear">Cancel</button>
             <span class="paste-hint" id="obstaclePasteHint"></span>
           </div>
           <p class="hint" style="margin-top:0.35rem;">With image loaded: <strong>Obstacle</strong> → two clicks for size. No image: one click = one fallback dot.</p>
           <div class="fallback-row">
-            <label>Choose (up to 3 images)</label>
+            <label>Choose (fallback + 3 slots)</label>
             <div class="choice-row" id="obstacleChoiceRow"></div>
           </div>
         </div>
@@ -439,7 +442,7 @@
     goalImage: null,
     charInsertedImage: null,
     goalInsertedImage: null,
-    obstacleInsertedImages: [],
+    obstacleInsertedImages: [null, null, null], // 3 fixed slots; null = empty
     title: 'Griddy',
     bg: '#1a1b26',
     placeMode: 'start' // start | goal | obstacle | erase
@@ -930,10 +933,11 @@
       buildGrid();
     } else if (state.pasteTarget === 'obstacle') {
       var arr = state.obstacleInsertedImages;
-      if (arr.indexOf(dataUrl) === -1) {
-        if (arr.length >= 3) arr.shift();
-        arr.push(dataUrl);
-      }
+      if (!Array.isArray(arr) || arr.length !== 3) state.obstacleInsertedImages = [null, null, null];
+      arr = state.obstacleInsertedImages;
+      var slot = arr.indexOf(null);
+      if (slot === -1) slot = 0;
+      arr[slot] = dataUrl;
       state.pendingObstacleImage = dataUrl;
       state.obstacleAnchor = null;
       setPlaceMode('obstacle');
@@ -1031,36 +1035,29 @@
     });
   }
 
-  function attachPendingObstacleImageInput() {
-    const input = document.getElementById('obstacleImageInput');
-    const clearBtn = document.getElementById('obstacleImageClear');
-    if (!input || !clearBtn) return;
-    input.addEventListener('change', async () => {
-      const file = input.files && input.files[0];
-      if (!file) return;
-      try {
-        const dataUrl = await readImageFile(file);
-        var arr = state.obstacleInsertedImages;
-        if (arr.indexOf(dataUrl) === -1) {
-          if (arr.length >= 3) arr.shift();
-          arr.push(dataUrl);
-        }
-        state.pendingObstacleImage = dataUrl;
-        state.obstacleAnchor = null;
-        setPlaceMode('obstacle');
-        buildChoiceRows();
-        buildGrid();
-      } catch (e) {
-        alert('Could not read image.');
-      }
-      input.value = '';
-    });
-    clearBtn.addEventListener('click', () => {
-      state.pendingObstacleImage = null;
-      state.obstacleAnchor = null;
-      buildChoiceRows();
-      buildGrid();
-    });
+  function attachObstacleImageInputs() {
+    for (var i = 0; i < 3; i++) {
+      (function (idx) {
+        var input = document.getElementById('obstacleImageInput' + idx);
+        if (!input) return;
+        input.addEventListener('change', function () {
+          var file = input.files && input.files[0];
+          if (!file) return;
+          readImageFile(file).then(function (dataUrl) {
+            if (!Array.isArray(state.obstacleInsertedImages) || state.obstacleInsertedImages.length !== 3) {
+              state.obstacleInsertedImages = [null, null, null];
+            }
+            state.obstacleInsertedImages[idx] = dataUrl;
+            state.pendingObstacleImage = dataUrl;
+            state.obstacleAnchor = null;
+            setPlaceMode('obstacle');
+            buildChoiceRows();
+            buildGrid();
+          }).catch(function () { alert('Could not read image.'); });
+          input.value = '';
+        });
+      })(i);
+    }
   }
 
   function buildChoiceRows() {
@@ -1113,9 +1110,29 @@
     if (el.obstacleChoiceRow) {
       el.obstacleChoiceRow.innerHTML = '';
       addFallbackBtn(el.obstacleChoiceRow, state.obstacleEmoji, !state.pendingObstacleImage, function () { state.pendingObstacleImage = null; });
-      (state.obstacleInsertedImages || []).forEach(function (dataUrl) {
-        addThumb(el.obstacleChoiceRow, dataUrl, state.pendingObstacleImage === dataUrl, function () { state.pendingObstacleImage = dataUrl; });
-      });
+      var slots = state.obstacleInsertedImages;
+      if (!Array.isArray(slots) || slots.length !== 3) {
+        state.obstacleInsertedImages = [slots && slots[0] || null, slots && slots[1] || null, slots && slots[2] || null];
+        slots = state.obstacleInsertedImages;
+      }
+      for (var i = 0; i < 3; i++) {
+        (function (idx) {
+          if (slots[idx]) {
+            addThumb(el.obstacleChoiceRow, slots[idx], state.pendingObstacleImage === slots[idx], function () { state.pendingObstacleImage = slots[idx]; });
+          } else {
+            var addBtn = document.createElement('button');
+            addBtn.type = 'button';
+            addBtn.className = 'slot-add';
+            addBtn.textContent = '+';
+            addBtn.title = 'Add image to slot ' + (idx + 1);
+            addBtn.addEventListener('click', function () {
+              var inp = document.getElementById('obstacleImageInput' + idx);
+              if (inp) inp.click();
+            });
+            el.obstacleChoiceRow.appendChild(addBtn);
+          }
+        })(i);
+      }
     }
   }
 
@@ -1169,7 +1186,7 @@
   document.body.style.background = state.bg;
   buildChoiceRows();
   attachImageInput('charImageInput', 'charImageClear', 'charImage', () => buildChoiceRows());
-  attachPendingObstacleImageInput();
+  attachObstacleImageInputs();
   attachImageInput('goalImageInput', 'goalImageClear', 'goalImage', () => buildChoiceRows());
 
   const pasteTargetInput = document.getElementById('pasteTargetInput');
