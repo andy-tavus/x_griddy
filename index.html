@@ -260,6 +260,10 @@
     }
     .choice-row .thumb.selected { border-color: #7aa2f7; }
     .choice-row .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .choice-row .thumb-wrap { position: relative; display: inline-block; width: 40px; height: 40px; flex-shrink: 0; }
+    .choice-row .thumb-wrap .thumb { position: absolute; inset: 0; }
+    .choice-row .thumb-wrap .slot-replace { position: absolute; bottom: 0; left: 0; right: 0; font-size: 0.55rem; padding: 1px 2px; background: rgba(0,0,0,0.8); color: var(--accent); cursor: pointer; border: none; border-radius: 0 0 6px 6px; line-height: 1; }
+    .choice-row .thumb-wrap .slot-replace:hover { color: #fff; }
     .choice-row > button.fallback-btn { width: 40px; height: 40px; font-size: 1.25rem; border: 2px solid transparent; border-radius: 8px; background: #1a1b26; cursor: pointer; }
     .choice-row > button.fallback-btn.selected { border-color: #7aa2f7; }
     .choice-row .slot-add { width: 40px; height: 40px; border-radius: 8px; border: 2px dashed #565f89; background: #1a1b26; color: var(--muted); font-size: 1.25rem; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -534,12 +538,23 @@
     }
   }
 
+  function isValidRegion(reg) {
+    if (!reg || typeof reg.r !== 'number' || typeof reg.c !== 'number' || typeof reg.rows !== 'number' || typeof reg.cols !== 'number') return false;
+    if (reg.r < 0 || reg.c < 0 || reg.rows < 1 || reg.cols < 1) return false;
+    if (reg.r + reg.rows > GRID || reg.c + reg.cols > GRID) return false;
+    return true;
+  }
+
   function regionContains(reg, r, c) {
-    return r >= reg.r && r < reg.r + reg.rows && c >= reg.c && c < reg.c + reg.cols;
+    return isValidRegion(reg) && r >= reg.r && r < reg.r + reg.rows && c >= reg.c && c < reg.c + reg.cols;
   }
 
   function isBlocked(r, c) {
     return state.obstacleRegions.some(reg => regionContains(reg, r, c));
+  }
+
+  function sanitizeObstacleRegions() {
+    state.obstacleRegions = state.obstacleRegions.filter(isValidRegion);
   }
 
   function removeRegionsCoveringCell(r, c) {
@@ -562,7 +577,7 @@
     const size = cellSize();
     const gap = gapSize();
     const step = size + gap;
-    state.obstacleRegions.forEach(reg => {
+    state.obstacleRegions.filter(isValidRegion).forEach(reg => {
       const div = document.createElement('div');
       div.className = 'obstacle-region';
       if (!reg.image) div.classList.add('emoji-only');
@@ -825,6 +840,7 @@
 
   function enterPlay() {
     state.mode = 'play';
+    sanitizeObstacleRegions();
     el.modeBadge.textContent = 'PLAY';
     el.modeBadge.className = 'mode-badge mode-play';
     el.setupSection.style.display = 'none';
@@ -1102,7 +1118,8 @@
       img.src = dataUrl;
       img.alt = '';
       t.appendChild(img);
-      t.addEventListener('click', function () {
+      t.addEventListener('click', function (e) {
+        if (e.target.classList && e.target.classList.contains('slot-replace')) return;
         parent.querySelectorAll('.selected').forEach(function (x) { x.classList.remove('selected'); });
         t.classList.add('selected');
         onClick();
@@ -1110,6 +1127,40 @@
         syncCharacterToStart();
       });
       parent.appendChild(t);
+    }
+    function addObstacleThumb(parent, dataUrl, idx, isSelected, onSelect) {
+      var wrap = document.createElement('div');
+      wrap.className = 'thumb-wrap';
+      var t = document.createElement('button');
+      t.type = 'button';
+      t.className = 'thumb' + (isSelected ? ' selected' : '');
+      var img = document.createElement('img');
+      img.src = dataUrl;
+      img.alt = '';
+      t.appendChild(img);
+      t.addEventListener('click', function () {
+        parent.querySelectorAll('.selected').forEach(function (x) { x.classList.remove('selected'); });
+        t.classList.add('selected');
+        onSelect();
+        buildChoiceRows();
+        buildGrid();
+      });
+      var replaceBtn = document.createElement('button');
+      replaceBtn.type = 'button';
+      replaceBtn.className = 'slot-replace';
+      replaceBtn.textContent = 'Replace';
+      replaceBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        state.pasteTarget = 'obstacle';
+        state.pasteTargetSlot = idx;
+        setPasteHint('obstacle', 'Paste to replace slot ' + (idx + 1));
+        var pi = document.getElementById('pasteTargetInput');
+        if (pi) { pi.value = ''; pi.focus(); }
+        buildChoiceRows();
+      });
+      wrap.appendChild(t);
+      wrap.appendChild(replaceBtn);
+      parent.appendChild(wrap);
     }
     if (el.charChoiceRow) {
       el.charChoiceRow.innerHTML = '';
@@ -1136,7 +1187,7 @@
       for (var i = 0; i < 3; i++) {
         (function (idx) {
           if (slots[idx]) {
-            addThumb(el.obstacleChoiceRow, slots[idx], state.pendingObstacleImage === slots[idx], function () { state.pendingObstacleImage = slots[idx]; });
+            addObstacleThumb(el.obstacleChoiceRow, slots[idx], idx, state.pendingObstacleImage === slots[idx], function () { state.pendingObstacleImage = slots[idx]; });
           } else {
             var addBtn = document.createElement('button');
             addBtn.type = 'button';
@@ -1218,7 +1269,17 @@
     const btn = document.getElementById(target + 'PasteBtn');
     if (btn) btn.addEventListener('click', async () => {
       state.pasteTarget = target;
-      setPasteHint(target, '…');
+      if (target === 'obstacle') {
+        var arr = state.obstacleInsertedImages;
+        if (!Array.isArray(arr) || arr.length !== 3) state.obstacleInsertedImages = [null, null, null];
+        arr = state.obstacleInsertedImages;
+        var firstEmpty = arr.indexOf(null);
+        state.pasteTargetSlot = firstEmpty >= 0 ? firstEmpty : 0;
+        setPasteHint(target, 'Slot ' + (state.pasteTargetSlot + 1) + ' — paste now (Ctrl+V)');
+      } else {
+        state.pasteTargetSlot = null;
+        setPasteHint(target, '…');
+      }
       try {
         if (navigator.clipboard && navigator.clipboard.read) {
           var items = await navigator.clipboard.read();
@@ -1237,7 +1298,11 @@
           }
         }
       } catch (e) { /* clipboard read not allowed or no image */ }
-      setPasteHint(target, 'Paste now (Ctrl+V)');
+      if (target === 'obstacle' && state.pasteTargetSlot != null) {
+        setPasteHint(target, 'Slot ' + (state.pasteTargetSlot + 1) + ' — paste now (Ctrl+V)');
+      } else {
+        setPasteHint(target, 'Paste now (Ctrl+V)');
+      }
       if (pasteTargetInput) {
         pasteTargetInput.value = '';
         pasteTargetInput.focus();
