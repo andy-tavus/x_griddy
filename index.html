@@ -252,6 +252,16 @@
       cursor: pointer;
     }
     .emoji-pick button.selected { border-color: #7aa2f7; }
+    .choice-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-top: 0.35rem; }
+    .choice-row .thumb {
+      width: 40px; height: 40px; border-radius: 8px; border: 2px solid transparent;
+      background: #1a1b26; cursor: pointer; padding: 0; overflow: hidden;
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    }
+    .choice-row .thumb.selected { border-color: #7aa2f7; }
+    .choice-row .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .choice-row > button.fallback-btn { width: 40px; height: 40px; font-size: 1.25rem; border: 2px solid transparent; border-radius: 8px; background: #1a1b26; cursor: pointer; }
+    .choice-row > button.fallback-btn.selected { border-color: #7aa2f7; }
 
     /* Images inside dots / character (data URLs — no external fetch) */
     .cell img, .character img, #overlayEmoji img {
@@ -323,8 +333,8 @@
             <span class="paste-hint" id="charPasteHint"></span>
           </div>
           <div class="fallback-row">
-            <label>Fallback (no image)</label>
-            <div class="emoji-pick" id="charPick"></div>
+            <label>Choose</label>
+            <div class="choice-row" id="charChoiceRow"></div>
           </div>
         </div>
         <div class="setup-image-block">
@@ -336,8 +346,8 @@
             <span class="paste-hint" id="goalPasteHint"></span>
           </div>
           <div class="fallback-row">
-            <label>Fallback (no image)</label>
-            <div class="emoji-pick" id="goalPick"></div>
+            <label>Choose</label>
+            <div class="choice-row" id="goalChoiceRow"></div>
           </div>
         </div>
         <div class="setup-image-block">
@@ -350,8 +360,8 @@
           </div>
           <p class="hint" style="margin-top:0.35rem;">With image loaded: <strong>Obstacle</strong> → two clicks for size. No image: one click = one fallback dot.</p>
           <div class="fallback-row">
-            <label>Fallback dot</label>
-            <div class="emoji-pick" id="obstaclePick"></div>
+            <label>Choose (up to 3 images)</label>
+            <div class="choice-row" id="obstacleChoiceRow"></div>
           </div>
         </div>
         <div class="row">
@@ -418,7 +428,7 @@
     goal: { r: 9, c: 9 },
     // Each region: { r, c, rows, cols, image, emoji } — image stretched over rows×cols
     obstacleRegions: [],
-    obstacleEmoji: '🪨',
+    obstacleEmoji: '🚧',
     obstacleAnchor: null, // first click when placing image rectangle
     pendingObstacleImage: null, // next rectangle uses this; each region keeps its own copy
     pasteTarget: null, // 'char' | 'goal' | 'obstacle' — next paste goes here (e.g. from Google Doc)
@@ -427,6 +437,9 @@
     // data URLs from local files — no server, no hotlink/CORS issues
     charImage: null,
     goalImage: null,
+    charInsertedImage: null,
+    goalInsertedImage: null,
+    obstacleInsertedImages: [],
     title: 'Griddy',
     bg: '#1a1b26',
     placeMode: 'start' // start | goal | obstacle | erase
@@ -434,7 +447,7 @@
 
   // Single fallback emoji per role unless user adds more later
   const CHAR_OPTIONS = ['🤖'];
-  const OBSTACLE_OPTIONS = ['🪨'];
+  const OBSTACLE_OPTIONS = ['🚧'];
   const GOAL_OPTIONS = ['🏁'];
 
   const el = {
@@ -459,9 +472,9 @@
     overlayEmoji: document.getElementById('overlayEmoji'),
     overlaySetupBtn: document.getElementById('overlaySetupBtn'),
     overlayPlayAgainBtn: document.getElementById('overlayPlayAgainBtn'),
-    charPick: document.getElementById('charPick'),
-    obstaclePick: document.getElementById('obstaclePick'),
-    goalPick: document.getElementById('goalPick'),
+    charChoiceRow: document.getElementById('charChoiceRow'),
+    goalChoiceRow: document.getElementById('goalChoiceRow'),
+    obstacleChoiceRow: document.getElementById('obstacleChoiceRow'),
     obstacleLayer: document.getElementById('obstacleLayer')
   };
 
@@ -905,18 +918,26 @@
 
   function applyPastedImage(dataUrl) {
     if (state.pasteTarget === 'char') {
+      state.charInsertedImage = dataUrl;
       state.charImage = dataUrl;
-      initEmojiPicks();
+      buildChoiceRows();
       buildGrid();
       syncCharacterToStart();
     } else if (state.pasteTarget === 'goal') {
+      state.goalInsertedImage = dataUrl;
       state.goalImage = dataUrl;
-      initEmojiPicks();
+      buildChoiceRows();
       buildGrid();
     } else if (state.pasteTarget === 'obstacle') {
+      var arr = state.obstacleInsertedImages;
+      if (arr.indexOf(dataUrl) === -1) {
+        if (arr.length >= 3) arr.shift();
+        arr.push(dataUrl);
+      }
       state.pendingObstacleImage = dataUrl;
       state.obstacleAnchor = null;
       setPlaceMode('obstacle');
+      buildChoiceRows();
       buildGrid();
     }
     setPasteHint(null, '');
@@ -985,11 +1006,14 @@
     const input = document.getElementById(inputId);
     const clearBtn = document.getElementById(clearId);
     if (!input || !clearBtn) return;
+    const insertedKey = stateKey === 'charImage' ? 'charInsertedImage' : stateKey === 'goalImage' ? 'goalInsertedImage' : null;
     input.addEventListener('change', async () => {
       const file = input.files && input.files[0];
       if (!file) return;
       try {
-        state[stateKey] = await readImageFile(file);
+        const dataUrl = await readImageFile(file);
+        state[stateKey] = dataUrl;
+        if (insertedKey) state[insertedKey] = dataUrl;
         if (afterSet) afterSet();
         buildGrid();
         syncCharacterToStart();
@@ -1015,9 +1039,16 @@
       const file = input.files && input.files[0];
       if (!file) return;
       try {
-        state.pendingObstacleImage = await readImageFile(file);
+        const dataUrl = await readImageFile(file);
+        var arr = state.obstacleInsertedImages;
+        if (arr.indexOf(dataUrl) === -1) {
+          if (arr.length >= 3) arr.shift();
+          arr.push(dataUrl);
+        }
+        state.pendingObstacleImage = dataUrl;
         state.obstacleAnchor = null;
         setPlaceMode('obstacle');
+        buildChoiceRows();
         buildGrid();
       } catch (e) {
         alert('Could not read image.');
@@ -1027,33 +1058,65 @@
     clearBtn.addEventListener('click', () => {
       state.pendingObstacleImage = null;
       state.obstacleAnchor = null;
+      buildChoiceRows();
       buildGrid();
     });
   }
 
-  function initEmojiPicks() {
-    function fill(container, options, current, onSelect) {
-      container.innerHTML = '';
-      options.forEach(em => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.textContent = em;
-        const useImage = (container === el.charPick && state.charImage) ||
-          (container === el.goalPick && state.goalImage);
-        if (em === current && !useImage) b.classList.add('selected');
-        b.addEventListener('click', () => {
-          container.querySelectorAll('button').forEach(x => x.classList.remove('selected'));
-          b.classList.add('selected');
-          onSelect(em);
-          buildGrid();
-          syncCharacterToStart();
-        });
-        container.appendChild(b);
+  function buildChoiceRows() {
+    function addFallbackBtn(parent, emoji, isSelected, onClick) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'fallback-btn';
+      b.textContent = emoji;
+      if (isSelected) b.classList.add('selected');
+      b.addEventListener('click', function () {
+        parent.querySelectorAll('.selected').forEach(function (x) { x.classList.remove('selected'); });
+        b.classList.add('selected');
+        onClick();
+        buildGrid();
+        syncCharacterToStart();
+      });
+      parent.appendChild(b);
+    }
+    function addThumb(parent, dataUrl, isSelected, onClick) {
+      var t = document.createElement('button');
+      t.type = 'button';
+      t.className = 'thumb' + (isSelected ? ' selected' : '');
+      var img = document.createElement('img');
+      img.src = dataUrl;
+      img.alt = '';
+      t.appendChild(img);
+      t.addEventListener('click', function () {
+        parent.querySelectorAll('.selected').forEach(function (x) { x.classList.remove('selected'); });
+        t.classList.add('selected');
+        onClick();
+        buildGrid();
+        syncCharacterToStart();
+      });
+      parent.appendChild(t);
+    }
+    if (el.charChoiceRow) {
+      el.charChoiceRow.innerHTML = '';
+      addFallbackBtn(el.charChoiceRow, state.charEmoji, !state.charImage, function () { state.charImage = null; });
+      if (state.charInsertedImage) {
+        addThumb(el.charChoiceRow, state.charInsertedImage, state.charImage === state.charInsertedImage, function () { state.charImage = state.charInsertedImage; });
+      }
+    }
+    if (el.goalChoiceRow) {
+      el.goalChoiceRow.innerHTML = '';
+      addFallbackBtn(el.goalChoiceRow, state.goalEmoji, !state.goalImage, function () { state.goalImage = null; });
+      if (state.goalInsertedImage) {
+        addThumb(el.goalChoiceRow, state.goalInsertedImage, state.goalImage === state.goalInsertedImage, function () { state.goalImage = state.goalInsertedImage; });
+      }
+    }
+    if (el.obstacleChoiceRow) {
+      el.obstacleChoiceRow.innerHTML = '';
+      addFallbackBtn(el.obstacleChoiceRow, state.obstacleEmoji, !state.pendingObstacleImage, function () { state.pendingObstacleImage = null; });
+      (state.obstacleInsertedImages || []).forEach(function (dataUrl) {
+        addThumb(el.obstacleChoiceRow, dataUrl, state.pendingObstacleImage === dataUrl, function () { state.pendingObstacleImage = dataUrl; });
       });
     }
-    fill(el.charPick, CHAR_OPTIONS, state.charEmoji, em => { state.charEmoji = em; state.charImage = null; });
-    fill(el.obstaclePick, OBSTACLE_OPTIONS, state.obstacleEmoji, em => { state.obstacleEmoji = em; });
-    fill(el.goalPick, GOAL_OPTIONS, state.goalEmoji, em => { state.goalEmoji = em; state.goalImage = null; });
   }
 
   el.titleInput.addEventListener('input', () => {
@@ -1104,10 +1167,10 @@
   document.getElementById('clearObstacleBtn').addEventListener('click', () => setPlaceMode('erase'));
 
   document.body.style.background = state.bg;
-  initEmojiPicks();
-  attachImageInput('charImageInput', 'charImageClear', 'charImage', () => initEmojiPicks());
+  buildChoiceRows();
+  attachImageInput('charImageInput', 'charImageClear', 'charImage', () => buildChoiceRows());
   attachPendingObstacleImageInput();
-  attachImageInput('goalImageInput', 'goalImageClear', 'goalImage', () => initEmojiPicks());
+  attachImageInput('goalImageInput', 'goalImageClear', 'goalImage', () => buildChoiceRows());
 
   const pasteTargetInput = document.getElementById('pasteTargetInput');
   ['char', 'goal', 'obstacle'].forEach(target => {
