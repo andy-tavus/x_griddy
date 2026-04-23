@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Griddy — Build</title>
+  <style>
+    :root {
+      --bg: #1a1b26;
+      --panel: #24283b;
+      --text: #c0caf5;
+      --muted: #565f89;
+      --dot: #414868;
+      --accent: #7aa2f7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem;
+      transition: background 0.3s;
+    }
+    h1 {
+      margin: 0 0 0.5rem;
+      font-size: 1.75rem;
+    }
+    .subtitle { color: var(--muted); margin-bottom: 1rem; font-size: 0.9rem; }
+
+    .layout {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: flex-start;
+      max-width: 100%;
+    }
+
+    .panel {
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      min-width: 260px;
+      border: 1px solid #3b4261;
+    }
+    .panel h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1rem;
+      color: var(--accent);
+    }
+
+    /* Grid */
+    .grid-wrap {
+      position: relative;
+      display: inline-block;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 4px;
+      padding: 8px;
+      background: rgba(0,0,0,0.25);
+      border-radius: 12px;
+    }
+    .cell {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--dot);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      cursor: default;
+      transition: background 0.2s, transform 0.15s;
+      position: relative;
+    }
+    .cell.setup-obstacle { cursor: pointer; }
+    .cell.start { box-shadow: 0 0 0 3px #9ece6a; }
+    .cell.goal { box-shadow: 0 0 0 3px #f7768e; }
+    .cell.north { background: #3d59a1 !important; }
+    .cell.south { background: #c53b53 !important; }
+    .cell.east  { background: #e0af68 !important; }
+    .cell.west  { background: #bb9af7 !important; }
+
+    /* Obstacle images stretched over multiple cells */
+    .obstacle-layer {
+      position: absolute;
+      pointer-events: none;
+      left: 8px;
+      top: 8px;
+      width: calc(10 * 36px + 9 * 4px);
+      height: calc(10 * 36px + 9 * 4px);
+      z-index: 1;
+    }
+    .obstacle-region {
+      position: absolute;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    .obstacle-region img {
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      display: block;
+      pointer-events: none;
+    }
+    .obstacle-region.emoji-only {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      background: rgba(0,0,0,0.35);
+    }
+    .obstacle-anchor-marker {
+      position: absolute;
+      border: 2px dashed #e0af68;
+      border-radius: 8px;
+      background: rgba(224, 175, 104, 0.15);
+      pointer-events: none;
+      box-sizing: border-box;
+    }
+
+    .character-layer {
+      position: absolute;
+      pointer-events: none;
+      left: 8px;
+      top: 8px;
+      width: calc(10 * 36px + 9 * 4px);
+      height: calc(10 * 36px + 9 * 4px);
+    }
+    .character {
+      position: absolute;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      transition: left 0.35s ease-in-out, top 0.35s ease-in-out;
+      z-index: 2;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+    }
+    .character.dance {
+      animation: dance 0.5s ease-in-out infinite;
+    }
+    @keyframes dance {
+      0%, 100% { transform: rotate(-8deg) scale(1); }
+      50% { transform: rotate(8deg) scale(1.1); }
+    }
+
+    /* Setup controls */
+    .row { margin-bottom: 0.75rem; }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
+    input[type="text"], input[type="color"], textarea, select {
+      width: 100%;
+      padding: 0.5rem;
+      border-radius: 8px;
+      border: 1px solid #3b4261;
+      background: #1a1b26;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    textarea {
+      min-height: 140px;
+      resize: vertical;
+      font-family: inherit;
+      line-height:1.5;
+    }
+    .instruction-line-wrap { margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem; }
+    .instruction-line-wrap input { flex: 1; }
+    .instruction-line-remove {
+      width: 28px; height: 28px; flex-shrink: 0; padding: 0; margin: 0;
+      border-radius: 6px; border: 1px solid #3b4261; background: #24283b; color: var(--muted);
+      font-size: 1.1rem; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .instruction-line-remove:hover { background: #414868; color: #f7768e; }
+    .instruction-line-remove:disabled, .instruction-line-remove[hidden] { visibility: hidden; pointer-events: none; }
+    .dir-badge {
+      width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem; font-weight: bold; color: #1a1b26;
+    }
+    .dir-n { background: #3d59a1; color: #fff; }
+    .dir-s { background: #c53b53; color: #fff; }
+    .dir-e { background: #e0af68; }
+    .dir-w { background: #bb9af7; }
+
+    .btn {
+      padding: 0.6rem 1rem;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .btn-primary { background: #7aa2f7; color: #1a1b26; }
+    .btn-primary:hover { background: #89b4fa; }
+    .btn-secondary { background: #565f89; color: #fff; }
+    .btn-secondary:hover { background: #6c7499; }
+    .btn-danger { background: #f7768e; color: #1a1b26; }
+    .btn-go { background: #9ece6a; color: #1a1b26; font-size: 1.1rem; padding: 0.75rem 1.5rem; }
+
+    .mode-badge {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+    .mode-setup { background: #e0af68; color: #1a1b26; }
+    .mode-play { background: #9ece6a; color: #1a1b26; }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 1rem;
+    }
+    .overlay-card {
+      background: var(--panel);
+      padding: 2rem;
+      border-radius: 16px;
+      text-align: center;
+      max-width: 360px;
+      border: 2px solid #3b4261;
+    }
+    .overlay-card h2 { margin-top: 0; }
+    .overlay-card.success h2 { color: #9ece6a; }
+    .overlay-card.fail h2 { color: #f7768e; }
+
+    .hint { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
+
+    .emoji-pick {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.35rem;
+    }
+    .emoji-pick button {
+      width: 40px; height: 40px;
+      font-size: 1.25rem;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      background: #1a1b26;
+      cursor: pointer;
+    }
+    .emoji-pick button.selected { border-color: #7aa2f7; }
+    .choice-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-top: 0.35rem; }
+    .choice-row .thumb {
+      width: 40px; height: 40px; border-radius: 8px; border: 2px solid transparent;
+      background: #1a1b26; cursor: pointer; padding: 0; overflow: hidden;
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    }
+    .choice-row .thumb.selected { border-color: #7aa2f7; }
+    .choice-row .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .choice-row .thumb-wrap { position: relative; display: inline-block; width: 40px; height: 40px; flex-shrink: 0; }
+    .choice-row .thumb-wrap .thumb { position: absolute; inset: 0; }
+    .choice-row .thumb-wrap .slot-replace { position: absolute; bottom: 0; left: 0; right: 0; font-size: 0.55rem; padding: 1px 2px; background: rgba(0,0,0,0.8); color: var(--accent); cursor: pointer; border: none; border-radius: 0 0 6px 6px; line-height: 1; }
+    .choice-row .thumb-wrap .slot-replace:hover { color: #fff; }
+    .choice-row > button.fallback-btn { width: 40px; height: 40px; font-size: 1.25rem; border: 2px solid transparent; border-radius: 8px; background: #1a1b26; cursor: pointer; }
+    .choice-row > button.fallback-btn.selected { border-color: #7aa2f7; }
+    .choice-row .slot-add { width: 40px; height: 40px; border-radius: 8px; border: 2px dashed #565f89; background: #1a1b26; color: var(--muted); font-size: 1.25rem; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .choice-row .slot-add:hover { border-color: var(--accent); color: var(--accent); }
+    .choice-row .slot-add.selected { border-color: var(--accent); color: var(--accent); }
+
+    /* Images inside dots / character (data URLs — no external fetch) */
+    .cell img, .character img, #overlayEmoji img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: 50%;
+      pointer-events: none;
+      display: block;
+    }
+    .cell-media {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .image-upload-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.35rem;
+    }
+    .image-upload-row input[type="file"] { font-size: 0.8rem; max-width: 100%; }
+    .image-upload-row .btn { margin-top: 0; padding: 0.4rem 0.65rem; font-size: 0.8rem; }
+    .paste-hint { font-size: 0.8rem; color: var(--accent); margin-left: 0.35rem; }
+    #pasteTargetInput { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .setup-image-block { margin-bottom: 0.75rem; }
+    .setup-image-block > label:first-child { font-weight: 600; color: var(--text); }
+    .fallback-row { margin-top: 0.35rem; }
+    .fallback-row label { font-size: 0.75rem; }
+    .overlay-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-top: 1rem; }
+    .overlay-actions .btn { margin: 0; }
+    .file-chooser-only { display: none; }
+    body.show-file-chooser .file-chooser-only { display: inline-block; }
+    .checkbox-label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; }
+    .checkbox-label input[type="checkbox"] { margin: 0; }
+
+    .setup-tabs { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.75rem; border-bottom: 1px solid #3b4261; }
+    .setup-tab { padding: 0.4rem 0.75rem; font-size: 0.85rem; font-weight: 600; border: none; border-radius: 8px 8px 0 0; background: transparent; color: var(--muted); cursor: pointer; margin: 0; }
+    .setup-tab:hover { color: var(--text); background: rgba(122, 162, 247, 0.15); }
+    .setup-tab.active { background: var(--panel); color: var(--accent); border: 1px solid #3b4261; border-bottom-color: var(--panel); margin-bottom: -1px; }
+    .tab-panel { display: none; padding-top: 0.25rem; }
+    .tab-panel.active { display: block; }
+
+    .nav-home { margin: 0 0 0.5rem; align-self: flex-start; max-width: 720px; width: 100%; }
+    .nav-home a { color: var(--accent); text-decoration: none; font-size: 0.9rem; font-weight: 600; }
+    .nav-home a:hover { text-decoration: underline; }
+
+    @media (max-width: 700px) {
+      .cell { width: 28px; height: 28px; font-size: 0.95rem; }
+      .character { width: 28px; height: 28px; font-size: 1.2rem; }
+      .character-layer, .obstacle-layer {
+        width: calc(10 * 28px + 9 * 4px);
+        height: calc(10 * 28px + 9 * 4px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <p class="nav-home"><a href="index.html">← Home</a></p>
+  <h1 id="challengeTitle">Griddy</h1>
+  <p class="subtitle">Build your challenge, then program your path dot by dot — no diagonals.</p>
+
+  <div class="layout">
+    <div class="panel" id="leftPanel">
+      <span class="mode-badge mode-setup" id="modeBadge">SETUP</span>
+      <div id="setupSection">
+        <h2>Setup</h2>
+        <div class="setup-tabs" role="tablist">
+          <button type="button" class="setup-tab active" role="tab" id="tabDetails" aria-selected="true" data-tab="details">Details</button>
+          <button type="button" class="setup-tab" role="tab" id="tabCharacter" aria-selected="false" data-tab="character">Character</button>
+          <button type="button" class="setup-tab" role="tab" id="tabGoal" aria-selected="false" data-tab="goal">Goal</button>
+          <button type="button" class="setup-tab" role="tab" id="tabObstacles" aria-selected="false" data-tab="obstacles">Obstacles</button>
+        </div>
+        <div id="panelDetails" class="tab-panel active" role="tabpanel">
+          <div class="row">
+            <label>Challenge title</label>
+            <input type="text" id="titleInput" placeholder="My maze" value="Griddy" />
+          </div>
+          <div class="row">
+            <label>Background</label>
+            <input type="color" id="bgColorInput" value="#1a1b26" />
+          </div>
+          <div class="row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="showFileChooser" />
+              Show file chooser
+            </label>
+          </div>
+          <p class="hint">Then use Character, Goal, and Obstacles tabs to choose images and place on the grid. Green = start, pink = goal.</p>
+        </div>
+        <div id="panelCharacter" class="tab-panel" role="tabpanel">
+          <div class="setup-image-block">
+            <label>Character</label>
+          <div class="image-upload-row">
+            <span class="file-chooser-only"><input type="file" id="charImageInput" accept="image/*" /></span>
+            <button type="button" class="btn btn-secondary" id="charPasteBtn">Paste</button>
+            <button type="button" class="btn btn-secondary" id="charImageClear">Use fallback</button>
+            <span class="paste-hint" id="charPasteHint"></span>
+          </div>
+          <div class="fallback-row">
+            <label>Choose</label>
+            <div class="choice-row" id="charChoiceRow"></div>
+          </div>
+          </div>
+          <div class="row">
+            <label>Place on grid</label>
+            <button type="button" class="btn btn-secondary" id="placeStartBtn" style="margin:0;">Set start</button>
+          </div>
+          <p class="hint">Click the button, then click a dot to set the start (green ring).</p>
+        </div>
+        <div id="panelGoal" class="tab-panel" role="tabpanel">
+          <div class="setup-image-block">
+            <label>Goal</label>
+            <div class="image-upload-row">
+              <span class="file-chooser-only"><input type="file" id="goalImageInput" accept="image/*" /></span>
+              <button type="button" class="btn btn-secondary" id="goalPasteBtn">Paste</button>
+              <button type="button" class="btn btn-secondary" id="goalImageClear">Use fallback</button>
+              <span class="paste-hint" id="goalPasteHint"></span>
+            </div>
+            <div class="fallback-row">
+              <label>Choose</label>
+              <div class="choice-row" id="goalChoiceRow"></div>
+            </div>
+          </div>
+          <div class="row">
+            <label>Place on grid</label>
+            <button type="button" class="btn btn-secondary" id="placeGoalBtn" style="margin:0;">Set goal</button>
+          </div>
+          <p class="hint">Click the button, then click a dot to set the goal (pink ring).</p>
+        </div>
+        <div id="panelObstacles" class="tab-panel" role="tabpanel">
+          <div class="setup-image-block">
+            <label>Obstacle</label>
+          <div class="image-upload-row">
+            <span class="file-chooser-only">
+              <input type="file" id="obstacleImageInput0" accept="image/*" />
+              <input type="file" id="obstacleImageInput1" accept="image/*" />
+              <input type="file" id="obstacleImageInput2" accept="image/*" />
+            </span>
+            <button type="button" class="btn btn-secondary" id="obstaclePasteBtn">Paste</button>
+            <span class="paste-hint" id="obstaclePasteHint"></span>
+          </div>
+          <p class="hint" style="margin-top:0.35rem;">Image: two clicks on grid = rectangle. Fallback: one click = one dot.</p>
+          <div class="fallback-row">
+            <label>Choose (fallback + 3 slots)</label>
+            <div class="choice-row" id="obstacleChoiceRow"></div>
+          </div>
+        </div>
+        <div class="row">
+          <label>Place on grid</label>
+          <div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
+            <button type="button" class="btn btn-secondary" id="placeObstacleBtn" style="margin:0;">Place obstacle</button>
+            <button type="button" class="btn btn-secondary" id="clearObstacleBtn" style="margin:0;">Erase</button>
+          </div>
+        </div>
+        <p class="hint">Click Place obstacle, then click the grid. Erase removes what’s under the click.</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="doneSetupBtn" style="margin-top:0.75rem;">DONE SETUP</button>
+      </div>
+
+      <div id="playSection" style="display: none;">
+        <h2>Instructions</h2>
+        <p class="hint">One line per move · e.g. <code>3 east</code></p>
+        <div id="instructionLines"></div>
+        <button type="button" class="btn btn-secondary" id="addLineBtn">+ Add line</button>
+        <button type="button" class="btn btn-secondary" id="resetLinesBtn">Reset</button>
+        <button type="button" class="btn btn-go" id="goBtn">GO</button>
+        <button type="button" class="btn btn-secondary" id="backToSetupBtn">Back to setup</button>
+      </div>
+    </div>
+
+    <div class="grid-wrap" id="gridWrap">
+      <div class="grid" id="grid"></div>
+      <div class="obstacle-layer" id="obstacleLayer"></div>
+      <div class="character-layer" id="charLayer">
+        <div class="character" id="character">🤖</div>
+      </div>
+    </div>
+  </div>
+
+  <input type="text" id="pasteTargetInput" tabindex="-1" aria-hidden="true" />
+
+  <div class="overlay" id="overlay" style="display: none;">
+    <div class="overlay-card" id="overlayCard">
+      <h2 id="overlayTitle">Success!</h2>
+      <div id="overlayEmoji" style="font-size: 4rem; margin: 1rem 0;">🎉</div>
+      <p id="overlayMsg"></p>
+      <div class="overlay-actions">
+        <button type="button" class="btn btn-go" id="overlayPlayAgainBtn">Play again</button>
+        <button type="button" class="btn btn-secondary" id="overlaySetupBtn">Setup</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+(function () {
+  const GRID = 10;
+  const CELL = 36; // match CSS; JS uses same for position math
+  const GAP = 4;
+  const IMAGE_MAX_SIDE = 512; // downscale uploads to keep memory sane
+
+  // [dr, dc]: row increases downward, column increases rightward
+  const DIRS = { n: [-1, 0], s: [1, 0], e: [0, 1], w: [0, -1] };
+  const DIR_CLASS = { n: 'north', s: 'south', e: 'east', w: 'west' };
+  const DIR_LINE_CLASS = { n: 'dir-n', s: 'dir-s', e: 'dir-e', w: 'dir-w' };
+
+  const state = {
+    mode: 'setup', // setup | play
+    start: { r: 0, c: 0 },
+    goal: { r: 9, c: 9 },
+    // Each region: { r, c, rows, cols, image, emoji } — image stretched over rows×cols
+    obstacleRegions: [],
+    obstacleEmoji: '🚧',
+    obstacleAnchor: null, // first click when placing image rectangle
+    pendingObstacleImage: null, // next rectangle uses this; each region keeps its own copy
+    pasteTarget: null, // 'char' | 'goal' | 'obstacle'
+    pasteTargetSlot: null, // for obstacle: 0, 1, or 2 when pasting into a slot
+    charEmoji: '🤖',
+    goalEmoji: '🏁',
+    // data URLs from local files — no server, no hotlink/CORS issues
+    charImage: null,
+    goalImage: null,
+    charInsertedImage: null,
+    goalInsertedImage: null,
+    obstacleInsertedImages: [null, null, null], // 3 fixed slots; null = empty
+    title: 'Griddy',
+    bg: '#1a1b26',
+    placeMode: 'start' // start | goal | obstacle | erase
+  };
+
+  // Single fallback emoji per role unless user adds more later
+  const CHAR_OPTIONS = ['🤖'];
+  const OBSTACLE_OPTIONS = ['🚧'];
+  const GOAL_OPTIONS = ['🏁'];
+
+  const el = {
+    grid: document.getElementById('grid'),
+    charLayer: document.getElementById('charLayer'),
+    character: document.getElementById('character'),
+    modeBadge: document.getElementById('modeBadge'),
+    setupSection: document.getElementById('setupSection'),
+    playSection: document.getElementById('playSection'),
+    titleInput: document.getElementById('titleInput'),
+    bgColorInput: document.getElementById('bgColorInput'),
+    challengeTitle: document.getElementById('challengeTitle'),
+    doneSetupBtn: document.getElementById('doneSetupBtn'),
+    goBtn: document.getElementById('goBtn'),
+    backToSetupBtn: document.getElementById('backToSetupBtn'),
+    addLineBtn: document.getElementById('addLineBtn'),
+    resetLinesBtn: document.getElementById('resetLinesBtn'),
+    instructionLines: document.getElementById('instructionLines'),
+    overlay: document.getElementById('overlay'),
+    overlayCard: document.getElementById('overlayCard'),
+    overlayTitle: document.getElementById('overlayTitle'),
+    overlayMsg: document.getElementById('overlayMsg'),
+    overlayEmoji: document.getElementById('overlayEmoji'),
+    overlaySetupBtn: document.getElementById('overlaySetupBtn'),
+    overlayPlayAgainBtn: document.getElementById('overlayPlayAgainBtn'),
+    charChoiceRow: document.getElementById('charChoiceRow'),
+    goalChoiceRow: document.getElementById('goalChoiceRow'),
+    obstacleChoiceRow: document.getElementById('obstacleChoiceRow'),
+    obstacleLayer: document.getElementById('obstacleLayer')
+  };
+
+  function key(r, c) { return r + ',' + c; }
+
+  function cellSize() {
+    const first = el.grid.querySelector('.cell');
+    if (!first) return CELL;
+    return first.getBoundingClientRect().width;
+  }
+
+  function gapSize() {
+    const cs = getComputedStyle(el.grid);
+    const g = cs.gap || cs.columnGap;
+    const n = parseInt(g, 10);
+    return isNaN(n) ? GAP : n;
+  }
+
+  function positionCharacter(r, c, instant) {
+    const size = cellSize();
+    const gap = gapSize();
+    const step = size + gap;
+    const left = c * step;
+    const top = r * step;
+    el.character.style.transition = instant ? 'none' : '';
+    el.character.style.left = left + 'px';
+    el.character.style.top = top + 'px';
+    if (instant) requestAnimationFrame(() => { el.character.style.transition = ''; });
+  }
+
+  function setCellMedia(div, emoji, imageDataUrl) {
+    div.textContent = '';
+    if (imageDataUrl) {
+      const img = document.createElement('img');
+      img.src = imageDataUrl;
+      img.alt = '';
+      div.appendChild(img);
+    } else if (emoji) {
+      div.textContent = emoji;
+    }
+  }
+
+  function isValidRegion(reg) {
+    if (!reg || typeof reg.r !== 'number' || typeof reg.c !== 'number' || typeof reg.rows !== 'number' || typeof reg.cols !== 'number') return false;
+    if (reg.r < 0 || reg.c < 0 || reg.rows < 1 || reg.cols < 1) return false;
+    if (reg.r + reg.rows > GRID || reg.c + reg.cols > GRID) return false;
+    return true;
+  }
+
+  function regionContains(reg, r, c) {
+    return isValidRegion(reg) && r >= reg.r && r < reg.r + reg.rows && c >= reg.c && c < reg.c + reg.cols;
+  }
+
+  function isBlocked(r, c) {
+    return state.obstacleRegions.some(reg => regionContains(reg, r, c));
+  }
+
+  function sanitizeObstacleRegions() {
+    state.obstacleRegions = state.obstacleRegions.filter(isValidRegion);
+  }
+
+  function removeRegionsCoveringCell(r, c) {
+    state.obstacleRegions = state.obstacleRegions.filter(reg => !regionContains(reg, r, c));
+  }
+
+  function regionIntersectsStartGoal(reg) {
+    for (let rr = reg.r; rr < reg.r + reg.rows; rr++) {
+      for (let cc = reg.c; cc < reg.c + reg.cols; cc++) {
+        if (rr === state.start.r && cc === state.start.c) return true;
+        if (rr === state.goal.r && cc === state.goal.c) return true;
+      }
+    }
+    return false;
+  }
+
+  function buildObstacleLayer() {
+    if (!el.obstacleLayer) return;
+    el.obstacleLayer.innerHTML = '';
+    const size = cellSize();
+    const gap = gapSize();
+    const step = size + gap;
+    state.obstacleRegions.filter(isValidRegion).forEach(reg => {
+      const div = document.createElement('div');
+      div.className = 'obstacle-region';
+      if (!reg.image) div.classList.add('emoji-only');
+      const w = reg.cols * size + (reg.cols - 1) * gap;
+      const h = reg.rows * size + (reg.rows - 1) * gap;
+      div.style.left = (reg.c * step) + 'px';
+      div.style.top = (reg.r * step) + 'px';
+      div.style.width = w + 'px';
+      div.style.height = h + 'px';
+      if (reg.image) {
+        const img = document.createElement('img');
+        img.src = reg.image;
+        img.alt = '';
+        div.appendChild(img);
+      } else {
+        div.textContent = reg.emoji || state.obstacleEmoji;
+      }
+      el.obstacleLayer.appendChild(div);
+    });
+    // First corner marker when placing image rectangle
+    if (state.placeMode === 'obstacle' && state.pendingObstacleImage && state.obstacleAnchor) {
+      const step = size + gap;
+      const m = document.createElement('div');
+      m.className = 'obstacle-anchor-marker';
+      m.style.left = (state.obstacleAnchor.c * step) + 'px';
+      m.style.top = (state.obstacleAnchor.r * step) + 'px';
+      m.style.width = size + 'px';
+      m.style.height = size + 'px';
+      el.obstacleLayer.appendChild(m);
+    }
+  }
+
+  function buildGrid() {
+    el.grid.innerHTML = '';
+    for (let r = 0; r < GRID; r++) {
+      for (let c = 0; c < GRID; c++) {
+        const div = document.createElement('div');
+        div.className = 'cell';
+        div.dataset.r = r;
+        div.dataset.c = c;
+        if (isBlocked(r, c)) div.classList.add('setup-obstacle');
+        if (r === state.start.r && c === state.start.c) div.classList.add('start');
+        if (r === state.goal.r && c === state.goal.c) {
+          div.classList.add('goal');
+          if (!isBlocked(r, c)) setCellMedia(div, state.goalEmoji, state.goalImage);
+        }
+        div.addEventListener('click', () => onCellClick(r, c));
+        el.grid.appendChild(div);
+      }
+    }
+    buildObstacleLayer();
+    syncCharacterToStart();
+  }
+
+  function renderCharacterMedia() {
+    el.character.textContent = '';
+    if (state.charImage) {
+      const img = document.createElement('img');
+      img.src = state.charImage;
+      img.alt = '';
+      el.character.appendChild(img);
+    } else {
+      el.character.textContent = state.charEmoji;
+    }
+  }
+
+  function syncCharacterToStart() {
+    renderCharacterMedia();
+    positionCharacter(state.start.r, state.start.c, true);
+  }
+
+  function onCellClick(r, c) {
+    if (state.mode !== 'setup') return;
+    if (state.placeMode === 'start') {
+      removeRegionsCoveringCell(r, c);
+      state.start = { r, c };
+      buildGrid();
+      return;
+    }
+    if (state.placeMode === 'goal') {
+      removeRegionsCoveringCell(r, c);
+      state.goal = { r, c };
+      buildGrid();
+      return;
+    }
+    if (state.placeMode === 'erase') {
+      removeRegionsCoveringCell(r, c);
+      state.obstacleAnchor = null;
+      buildGrid();
+      return;
+    }
+    // obstacle mode
+    if (r === state.start.r && c === state.start.c) return;
+    if (r === state.goal.r && c === state.goal.c) return;
+
+    // Image rectangle: two clicks define bounding box
+    if (state.pendingObstacleImage) {
+      if (!state.obstacleAnchor) {
+        state.obstacleAnchor = { r, c };
+        buildGrid();
+        return;
+      }
+      const r1 = state.obstacleAnchor.r, c1 = state.obstacleAnchor.c;
+      const r2 = r, c2 = c;
+      const top = Math.min(r1, r2), left = Math.min(c1, c2);
+      const bottom = Math.max(r1, r2), right = Math.max(c1, c2);
+      const rows = bottom - top + 1, cols = right - left + 1;
+      const newReg = { r: top, c: left, rows, cols, image: state.pendingObstacleImage, emoji: null };
+      if (!regionIntersectsStartGoal(newReg)) {
+        // optional: merge or stack — allow overlap; collision is any region
+        state.obstacleRegions.push(newReg);
+      }
+      state.obstacleAnchor = null;
+      buildGrid();
+      return;
+    }
+
+    // Emoji 1×1 toggle: only if no region already covers this cell as sole 1x1 emoji toggle off
+    const existing = state.obstacleRegions.find(reg => regionContains(reg, r, c));
+    if (existing && existing.rows === 1 && existing.cols === 1 && !existing.image) {
+      state.obstacleRegions = state.obstacleRegions.filter(reg => reg !== existing);
+      buildGrid();
+      return;
+    }
+    if (existing) return; // covered by bigger region — use erase
+    const one = { r, c, rows: 1, cols: 1, image: null, emoji: state.obstacleEmoji };
+    if (!regionIntersectsStartGoal(one)) state.obstacleRegions.push(one);
+    buildGrid();
+  }
+
+  function parseInstruction(line) {
+    const s = line.trim().toLowerCase();
+    if (!s) return null;
+    const m = s.match(/^(\d+)\s*(?:dots?\s*)?(north|south|east|west|n|e|s|w)\b/);
+    if (!m) return null;
+    const n = parseInt(m[1], 10);
+    if (n < 1 || n > 20) return null;
+    let d = m[2];
+    if (d === 'north' || d === 'n') d = 'n';
+    else if (d === 'south' || d === 's') d = 's';
+    else if (d === 'east' || d === 'e') d = 'e';
+    else if (d === 'west' || d === 'w') d = 'w';
+    else return null;
+    return { steps: n, dir: d };
+  }
+
+  function detectDirFromLine(line) {
+    const s = line.trim().toLowerCase();
+    if (/north|\bn\b/.test(s) && !/south/.test(s)) return 'n';
+    if (/south|\bs\b/.test(s)) return 's';
+    if (/east|\be\b/.test(s)) return 'e';
+    if (/west|\bw\b/.test(s)) return 'w';
+    return null;
+  }
+
+  function expandInstructions(text) {
+    const lines = text.split('\n');
+    const moves = [];
+    for (const line of lines) {
+      const p = parseInstruction(line);
+      if (p) {
+        for (let i = 0; i < p.steps; i++) moves.push(p.dir);
+      }
+    }
+    return moves;
+  }
+
+  async function runMoves(moves) {
+    let r = state.start.r, c = state.start.c;
+    const goalR = state.goal.r, goalC = state.goal.c;
+
+    // Clear previous path colors
+    el.grid.querySelectorAll('.cell').forEach(cell => {
+      cell.classList.remove('north', 'south', 'east', 'west');
+    });
+
+    for (const dir of moves) {
+      const [dr, dc] = DIRS[dir];
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nr >= GRID || nc < 0 || nc >= GRID) {
+        syncCharacterToStart();
+        return { ok: false, reason: 'out' };
+      }
+      if (isBlocked(nr, nc)) {
+        positionCharacter(nr, nc, false);
+        await sleep(380);
+        syncCharacterToStart();
+        return { ok: false, reason: 'obstacle' };
+      }
+      r = nr; c = nc;
+      positionCharacter(r, c, false);
+      const prevR = r - dr, prevC = c - dc;
+      const prevCell = el.grid.querySelector(`.cell[data-r="${prevR}"][data-c="${prevC}"]`);
+      if (prevCell) prevCell.classList.add(DIR_CLASS[dir]);
+      await sleep(400);
+    }
+
+    if (r === goalR && c === goalC) return { ok: true };
+    syncCharacterToStart();
+    return { ok: false, reason: 'notgoal' };
+  }
+
+  function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
+
+  function showOverlay(success, msg) {
+    el.overlayCard.classList.remove('success', 'fail');
+    el.overlayCard.classList.add(success ? 'success' : 'fail');
+    el.overlayTitle.textContent = success ? 'Success!' : 'Fail';
+    el.overlayMsg.textContent = msg || '';
+    el.overlayEmoji.textContent = '';
+    if (success && state.charImage) {
+      const img = document.createElement('img');
+      img.src = state.charImage;
+      img.alt = '';
+      img.style.width = '4rem';
+      img.style.height = '4rem';
+      img.style.margin = '0 auto';
+      el.overlayEmoji.appendChild(img);
+    } else {
+      el.overlayEmoji.textContent = success ? state.charEmoji : '💥';
+    }
+    el.character.classList.toggle('dance', success);
+    el.overlay.style.display = 'flex';
+  }
+
+  function hideOverlay() {
+    el.overlay.style.display = 'none';
+    el.character.classList.remove('dance');
+  }
+
+  function playAgain() {
+    hideOverlay();
+    el.grid.querySelectorAll('.cell').forEach(cell => {
+      cell.classList.remove('north', 'south', 'east', 'west');
+    });
+    syncCharacterToStart();
+  }
+
+  function setPlaceMode(mode) {
+    state.placeMode = mode;
+    ['placeStartBtn','placeGoalBtn','placeObstacleBtn','clearObstacleBtn'].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.style.outline = '';
+    });
+    const activeId = mode === 'start' ? 'placeStartBtn' : mode === 'goal' ? 'placeGoalBtn' : mode === 'obstacle' ? 'placeObstacleBtn' : 'clearObstacleBtn';
+    const b = document.getElementById(activeId);
+    if (b) b.style.outline = '2px solid #7aa2f7';
+  }
+
+  function enterSetup() {
+    state.mode = 'setup';
+    setPlaceMode('start');
+    el.modeBadge.textContent = 'SETUP';
+    el.modeBadge.className = 'mode-badge mode-setup';
+    el.setupSection.style.display = 'block';
+    el.playSection.style.display = 'none';
+    buildGrid();
+    hideOverlay();
+  }
+
+  function enterPlay() {
+    state.mode = 'play';
+    sanitizeObstacleRegions();
+    el.modeBadge.textContent = 'PLAY';
+    el.modeBadge.className = 'mode-badge mode-play';
+    el.setupSection.style.display = 'none';
+    el.playSection.style.display = 'block';
+    buildGrid();
+    syncCharacterToStart();
+    ensureInstructionLines();
+  }
+
+  function ensureInstructionLines() {
+    if (el.instructionLines.children.length === 0) addInstructionLine('');
+    updateLineColors();
+    updateInstructionRemoveButtons();
+  }
+
+  function updateInstructionRemoveButtons() {
+    const wraps = el.instructionLines.querySelectorAll('.instruction-line-wrap');
+    const showRemove = wraps.length > 1;
+    wraps.forEach(wrap => {
+      const btn = wrap.querySelector('.instruction-line-remove');
+      if (!btn) return;
+      btn.disabled = !showRemove;
+      btn.toggleAttribute('hidden', !showRemove);
+    });
+  }
+
+  function resetInstructionLines() {
+    el.instructionLines.innerHTML = '';
+    addInstructionLine('');
+  }
+
+  function addInstructionLine(value) {
+    const wrap = document.createElement('div');
+    wrap.className = 'instruction-line-wrap';
+    const badge = document.createElement('span');
+    badge.className = 'dir-badge';
+    badge.textContent = '·';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = '3 dots east';
+    input.value = value;
+    input.addEventListener('input', updateLineColors);
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'instruction-line-remove';
+    removeBtn.setAttribute('aria-label', 'Remove line');
+    removeBtn.title = 'Remove line';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', () => {
+      if (el.instructionLines.querySelectorAll('.instruction-line-wrap').length <= 1) return;
+      wrap.remove();
+      updateInstructionRemoveButtons();
+      updateLineColors();
+    });
+    wrap.appendChild(badge);
+    wrap.appendChild(input);
+    wrap.appendChild(removeBtn);
+    el.instructionLines.appendChild(wrap);
+    updateLineColors();
+    updateInstructionRemoveButtons();
+  }
+
+  function updateLineColors() {
+    el.instructionLines.querySelectorAll('.instruction-line-wrap').forEach(wrap => {
+      const input = wrap.querySelector('input');
+      const badge = wrap.querySelector('.dir-badge');
+      const d = detectDirFromLine(input.value);
+      badge.className = 'dir-badge ' + (d ? DIR_LINE_CLASS[d] : '');
+      badge.textContent = d ? d.toUpperCase() : '·';
+    });
+  }
+
+  function getInstructionsText() {
+    const lines = [];
+    el.instructionLines.querySelectorAll('input').forEach(inp => lines.push(inp.value));
+    return lines.join('\n');
+  }
+
+  function downscaleDataURL(dataUrl, maxSide) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.naturalWidth, h = img.naturalHeight;
+        if (w <= 0 || h <= 0) { resolve(dataUrl); return; }
+        if (w <= maxSide && h <= maxSide) { resolve(dataUrl); return; }
+        const scale = maxSide / Math.max(w, h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        } catch (e) {
+          resolve(canvas.toDataURL('image/png'));
+        }
+      };
+      img.onerror = () => reject(new Error('Image load failed'));
+      img.src = dataUrl;
+    });
+  }
+
+  function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      if (!file || !file.type.startsWith('image/')) {
+        reject(new Error('Not an image'));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /** Read file, downscale, return data URL (JPEG when possible for size). */
+  async function readImageFile(file) {
+    const raw = await readFileAsDataURL(file);
+    return downscaleDataURL(raw, IMAGE_MAX_SIDE);
+  }
+
+  function blobToDataURL(blob) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(blob);
+    });
+  }
+
+  function setPasteHint(target, msg) {
+    ['char', 'goal', 'obstacle'].forEach(t => {
+      const el = document.getElementById(t + 'PasteHint');
+      if (el) el.textContent = target === t ? (msg || '') : '';
+    });
+  }
+
+  function applyPastedImage(dataUrl) {
+    if (state.pasteTarget === 'char') {
+      state.charInsertedImage = dataUrl;
+      state.charImage = dataUrl;
+      buildChoiceRows();
+      buildGrid();
+      syncCharacterToStart();
+    } else if (state.pasteTarget === 'goal') {
+      state.goalInsertedImage = dataUrl;
+      state.goalImage = dataUrl;
+      buildChoiceRows();
+      buildGrid();
+    } else if (state.pasteTarget === 'obstacle') {
+      var arr = state.obstacleInsertedImages;
+      if (!Array.isArray(arr) || arr.length !== 3) state.obstacleInsertedImages = [null, null, null];
+      arr = state.obstacleInsertedImages;
+      var slot = state.pasteTargetSlot;
+      if (slot == null || slot < 0 || slot > 2) slot = arr.indexOf(null);
+      if (slot === -1) slot = 0;
+      arr[slot] = dataUrl;
+      state.pendingObstacleImage = dataUrl;
+      state.pasteTargetSlot = null;
+      state.obstacleAnchor = null;
+      setPlaceMode('obstacle');
+      buildChoiceRows();
+      buildGrid();
+    }
+    setPasteHint(null, '');
+    state.pasteTarget = null;
+    state.pasteTargetSlot = null;
+    var p = document.getElementById('pasteTargetInput');
+    if (p) p.blur();
+  }
+
+  function handlePaste(e) {
+    if (!state.pasteTarget) return;
+    const dt = e.clipboardData;
+    if (!dt) return;
+    let blob = null;
+    let dataUrlFromHtml = null;
+    if (dt.items) {
+      for (let i = 0; i < dt.items.length; i++) {
+        const item = dt.items[i];
+        if (item.kind === 'file' && item.type.indexOf('image') !== -1) {
+          blob = item.getAsFile();
+          break;
+        }
+      }
+    }
+    if (!blob && dt.files && dt.files.length > 0) {
+      for (let i = 0; i < dt.files.length; i++) {
+        if (dt.files[i].type.indexOf('image') !== -1) {
+          blob = dt.files[i];
+          break;
+        }
+      }
+    }
+    if (!blob && dt.types && dt.types.indexOf('text/html') !== -1) {
+      var html = dt.getData('text/html');
+      if (html) {
+        var match = html.match(/<img[^>]+src\s*=\s*[\"'](data:image\/[^\"']+)[\"']/i);
+        if (match) dataUrlFromHtml = match[1];
+      }
+    }
+    if (!blob && !dataUrlFromHtml) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setPasteHint(state.pasteTarget, '…');
+    (async () => {
+      try {
+        var dataUrl;
+        if (dataUrlFromHtml) {
+          dataUrl = await downscaleDataURL(dataUrlFromHtml, IMAGE_MAX_SIDE);
+        } else {
+          var raw = await blobToDataURL(blob);
+          dataUrl = await downscaleDataURL(raw, IMAGE_MAX_SIDE);
+        }
+        applyPastedImage(dataUrl);
+      } catch (err) {
+        setPasteHint(null, '');
+        state.pasteTarget = null;
+        state.pasteTargetSlot = null;
+        var p = document.getElementById('pasteTargetInput');
+        if (p) p.blur();
+        alert('Could not use pasted image.');
+      }
+    })();
+  }
+
+  document.addEventListener('paste', handlePaste, true);
+
+  function attachImageInput(inputId, clearId, stateKey, afterSet) {
+    const input = document.getElementById(inputId);
+    const clearBtn = document.getElementById(clearId);
+    if (!input || !clearBtn) return;
+    const insertedKey = stateKey === 'charImage' ? 'charInsertedImage' : stateKey === 'goalImage' ? 'goalInsertedImage' : null;
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      try {
+        const dataUrl = await readImageFile(file);
+        state[stateKey] = dataUrl;
+        if (insertedKey) state[insertedKey] = dataUrl;
+        if (afterSet) afterSet();
+        buildGrid();
+        syncCharacterToStart();
+      } catch (e) {
+        alert('Could not read image. Try JPG or PNG.');
+      }
+      input.value = '';
+    });
+    clearBtn.addEventListener('click', () => {
+      state[stateKey] = null;
+      state.obstacleAnchor = null;
+      if (afterSet) afterSet();
+      buildGrid();
+      syncCharacterToStart();
+    });
+  }
+
+  function attachObstacleImageInputs() {
+    for (var i = 0; i < 3; i++) {
+      (function (idx) {
+        var input = document.getElementById('obstacleImageInput' + idx);
+        if (!input) return;
+        input.addEventListener('change', function () {
+          var file = input.files && input.files[0];
+          if (!file) return;
+          readImageFile(file).then(function (dataUrl) {
+            if (!Array.isArray(state.obstacleInsertedImages) || state.obstacleInsertedImages.length !== 3) {
+              state.obstacleInsertedImages = [null, null, null];
+            }
+            state.obstacleInsertedImages[idx] = dataUrl;
+            state.pendingObstacleImage = dataUrl;
+            state.obstacleAnchor = null;
+            setPlaceMode('obstacle');
+            buildChoiceRows();
+            buildGrid();
+          }).catch(function () { alert('Could not read image.'); });
+          input.value = '';
+        });
+      })(i);
+    }
+  }
+
+  function buildChoiceRows() {
+    function addFallbackBtn(parent, emoji, isSelected, onClick) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'fallback-btn';
+      b.textContent = emoji;
+      if (isSelected) b.classList.add('selected');
+      b.addEventListener('click', function () {
+        parent.querySelectorAll('.selected').forEach(function (x) { x.classList.remove('selected'); });
+        b.classList.add('selected');
+        onClick();
+        buildGrid();
+        syncCharacterToStart();
+      });
+      parent.appendChild(b);
+    }
+    function addThumb(parent, dataUrl, isSelected, onClick) {
+      var t = document.createElement('button');
+      t.type = 'button';
+      t.className = 'thumb' + (isSelected ? ' selected' : '');
+      var img = document.createElement('img');
+      img.src = dataUrl;
+      img.alt = '';
+      t.appendChild(img);
+      t.addEventListener('click', function (e) {
+        if (e.target.classList && e.target.classList.contains('slot-replace')) return;
+        parent.querySelectorAll('.selected').forEach(function (x) { x.classList.remove('selected'); });
+        t.classList.add('selected');
+        onClick();
+        buildGrid();
+        syncCharacterToStart();
+      });
+      parent.appendChild(t);
+    }
+    function addObstacleThumb(parent, dataUrl, idx, isSelected, onSelect) {
+      var wrap = document.createElement('div');
+      wrap.className = 'thumb-wrap';
+      var t = document.createElement('button');
+      t.type = 'button';
+      t.className = 'thumb' + (isSelected ? ' selected' : '');
+      var img = document.createElement('img');
+      img.src = dataUrl;
+      img.alt = '';
+      t.appendChild(img);
+      t.addEventListener('click', function () {
+        parent.querySelectorAll('.selected').forEach(function (x) { x.classList.remove('selected'); });
+        t.classList.add('selected');
+        onSelect();
+        buildChoiceRows();
+        buildGrid();
+      });
+      var replaceBtn = document.createElement('button');
+      replaceBtn.type = 'button';
+      replaceBtn.className = 'slot-replace';
+      replaceBtn.textContent = 'Replace';
+      replaceBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        state.pasteTarget = 'obstacle';
+        state.pasteTargetSlot = idx;
+        setPasteHint('obstacle', 'Paste to replace slot ' + (idx + 1));
+        var pi = document.getElementById('pasteTargetInput');
+        if (pi) { pi.value = ''; pi.focus(); }
+        buildChoiceRows();
+      });
+      wrap.appendChild(t);
+      wrap.appendChild(replaceBtn);
+      parent.appendChild(wrap);
+    }
+    if (el.charChoiceRow) {
+      el.charChoiceRow.innerHTML = '';
+      addFallbackBtn(el.charChoiceRow, state.charEmoji, !state.charImage, function () { state.charImage = null; });
+      if (state.charInsertedImage) {
+        addThumb(el.charChoiceRow, state.charInsertedImage, state.charImage === state.charInsertedImage, function () { state.charImage = state.charInsertedImage; });
+      }
+    }
+    if (el.goalChoiceRow) {
+      el.goalChoiceRow.innerHTML = '';
+      addFallbackBtn(el.goalChoiceRow, state.goalEmoji, !state.goalImage, function () { state.goalImage = null; });
+      if (state.goalInsertedImage) {
+        addThumb(el.goalChoiceRow, state.goalInsertedImage, state.goalImage === state.goalInsertedImage, function () { state.goalImage = state.goalInsertedImage; });
+      }
+    }
+    if (el.obstacleChoiceRow) {
+      el.obstacleChoiceRow.innerHTML = '';
+      addFallbackBtn(el.obstacleChoiceRow, state.obstacleEmoji, !state.pendingObstacleImage, function () { state.pendingObstacleImage = null; });
+      var slots = state.obstacleInsertedImages;
+      if (!Array.isArray(slots) || slots.length !== 3) {
+        state.obstacleInsertedImages = [slots && slots[0] || null, slots && slots[1] || null, slots && slots[2] || null];
+        slots = state.obstacleInsertedImages;
+      }
+      for (var i = 0; i < 3; i++) {
+        (function (idx) {
+          if (slots[idx]) {
+            addObstacleThumb(el.obstacleChoiceRow, slots[idx], idx, state.pendingObstacleImage === slots[idx], function () { state.pendingObstacleImage = slots[idx]; });
+          } else {
+            var addBtn = document.createElement('button');
+            addBtn.type = 'button';
+            addBtn.className = 'slot-add' + (state.pasteTarget === 'obstacle' && state.pasteTargetSlot === idx ? ' selected' : '');
+            addBtn.textContent = '+';
+            addBtn.title = 'Click then paste (Ctrl+V) to add image to slot ' + (idx + 1);
+            addBtn.addEventListener('click', function () {
+              state.pasteTarget = 'obstacle';
+              state.pasteTargetSlot = idx;
+              setPasteHint('obstacle', 'Paste now (Ctrl+V)');
+              var pi = document.getElementById('pasteTargetInput');
+              if (pi) { pi.value = ''; pi.focus(); }
+              buildChoiceRows();
+            });
+            el.obstacleChoiceRow.appendChild(addBtn);
+          }
+        })(i);
+      }
+    }
+  }
+
+  el.titleInput.addEventListener('input', () => {
+    state.title = el.titleInput.value || 'Griddy';
+    el.challengeTitle.textContent = state.title;
+  });
+  el.bgColorInput.addEventListener('input', () => {
+    state.bg = el.bgColorInput.value;
+    document.body.style.background = state.bg;
+  });
+
+  el.doneSetupBtn.addEventListener('click', () => {
+    state.title = el.titleInput.value || 'Griddy';
+    el.challengeTitle.textContent = state.title;
+    enterPlay();
+  });
+
+  el.backToSetupBtn.addEventListener('click', enterSetup);
+  el.overlaySetupBtn.addEventListener('click', enterSetup);
+  if (el.overlayPlayAgainBtn) el.overlayPlayAgainBtn.addEventListener('click', playAgain);
+
+  el.addLineBtn.addEventListener('click', () => addInstructionLine(''));
+  if (el.resetLinesBtn) el.resetLinesBtn.addEventListener('click', resetInstructionLines);
+
+  el.goBtn.addEventListener('click', async () => {
+    const text = getInstructionsText();
+    const moves = expandInstructions(text);
+    if (moves.length === 0) {
+      showOverlay(false, 'Add a line like 2 east');
+      return;
+    }
+    el.goBtn.disabled = true;
+    const result = await runMoves(moves);
+    el.goBtn.disabled = false;
+    if (result.ok) {
+      showOverlay(true, 'Goal!');
+    } else if (result.reason === 'obstacle') {
+      showOverlay(false, 'Blocked.');
+    } else if (result.reason === 'out') {
+      showOverlay(false, 'Off grid.');
+    } else {
+      showOverlay(false, 'Missed goal.');
+    }
+  });
+
+  document.getElementById('placeStartBtn').addEventListener('click', () => setPlaceMode('start'));
+  document.getElementById('placeGoalBtn').addEventListener('click', () => setPlaceMode('goal'));
+  document.getElementById('placeObstacleBtn').addEventListener('click', () => setPlaceMode('obstacle'));
+  document.getElementById('clearObstacleBtn').addEventListener('click', () => setPlaceMode('erase'));
+
+  document.body.style.background = state.bg;
+  var showFileChooser = document.getElementById('showFileChooser');
+  if (showFileChooser) showFileChooser.addEventListener('change', function () { document.body.classList.toggle('show-file-chooser', this.checked); });
+  function switchSetupTab(tabId) {
+    ['details', 'character', 'goal', 'obstacles'].forEach(function (id) {
+      var tab = document.getElementById('tab' + id.charAt(0).toUpperCase() + id.slice(1));
+      var panel = document.getElementById('panel' + id.charAt(0).toUpperCase() + id.slice(1));
+      if (tab) { tab.classList.toggle('active', id === tabId); tab.setAttribute('aria-selected', id === tabId ? 'true' : 'false'); }
+      if (panel) panel.classList.toggle('active', id === tabId);
+    });
+  }
+  document.querySelectorAll('.setup-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var t = this.getAttribute('data-tab');
+      if (t) switchSetupTab(t);
+    });
+  });
+  buildChoiceRows();
+  attachImageInput('charImageInput', 'charImageClear', 'charImage', () => buildChoiceRows());
+  attachObstacleImageInputs();
+  attachImageInput('goalImageInput', 'goalImageClear', 'goalImage', () => buildChoiceRows());
+
+  const pasteTargetInput = document.getElementById('pasteTargetInput');
+  ['char', 'goal', 'obstacle'].forEach(target => {
+    const btn = document.getElementById(target + 'PasteBtn');
+    if (btn) btn.addEventListener('click', async () => {
+      state.pasteTarget = target;
+      if (target === 'obstacle') {
+        var arr = state.obstacleInsertedImages;
+        if (!Array.isArray(arr) || arr.length !== 3) state.obstacleInsertedImages = [null, null, null];
+        arr = state.obstacleInsertedImages;
+        var firstEmpty = arr.indexOf(null);
+        state.pasteTargetSlot = firstEmpty >= 0 ? firstEmpty : 0;
+        setPasteHint(target, 'Slot ' + (state.pasteTargetSlot + 1) + ' — paste now (Ctrl+V)');
+      } else {
+        state.pasteTargetSlot = null;
+        setPasteHint(target, '…');
+      }
+      try {
+        if (navigator.clipboard && navigator.clipboard.read) {
+          var items = await navigator.clipboard.read();
+          for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            var types = item.types || [];
+            for (var t = 0; t < types.length; t++) {
+              if (types[t].indexOf('image') !== -1) {
+                var blob = await item.getType(types[t]);
+                var raw = await blobToDataURL(blob);
+                var dataUrl = await downscaleDataURL(raw, IMAGE_MAX_SIDE);
+                applyPastedImage(dataUrl);
+                return;
+              }
+            }
+          }
+        }
+      } catch (e) { /* clipboard read not allowed or no image */ }
+      if (target === 'obstacle' && state.pasteTargetSlot != null) {
+        setPasteHint(target, 'Slot ' + (state.pasteTargetSlot + 1) + ' — paste now (Ctrl+V)');
+      } else {
+        setPasteHint(target, 'Paste now (Ctrl+V)');
+      }
+      if (pasteTargetInput) {
+        pasteTargetInput.value = '';
+        pasteTargetInput.focus();
+      }
+    });
+  });
+  setPlaceMode('start');
+  buildGrid();
+
+  window.addEventListener('resize', () => {
+    buildObstacleLayer();
+    syncCharacterToStart();
+  });
+})();
+  </script>
+</body>
+</html>

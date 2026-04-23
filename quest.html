@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Griddy — Quest</title>
+  <style>
+    :root {
+      --bg: #1a1b26;
+      --panel: #24283b;
+      --text: #c0caf5;
+      --muted: #565f89;
+      --dot: #414868;
+      --accent: #7aa2f7;
+    }
+    * { box-sizing: border-box; }
+    body.quest-page {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem;
+    }
+    .nav-home { margin: 0 0 0.5rem; align-self: flex-start; max-width: 720px; width: 100%; }
+    .nav-home a { color: var(--accent); text-decoration: none; font-size: 0.9rem; font-weight: 600; }
+    .nav-home a:hover { text-decoration: underline; }
+    h1 { margin: 0 0 0.25rem; font-size: 1.65rem; }
+    .subtitle { color: var(--muted); margin-bottom: 1rem; font-size: 0.9rem; max-width: 36rem; text-align: center; }
+    .layout {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: flex-start;
+      max-width: 100%;
+    }
+    .panel {
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      min-width: 260px;
+      border: 1px solid #3b4261;
+    }
+    .panel h2 { margin: 0 0 0.5rem; font-size: 1rem; color: var(--accent); }
+    .level-meta { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.75rem; line-height: 1.4; }
+    .level-nav { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.75rem; align-items: center; }
+    .level-nav span { font-weight: 700; color: var(--text); margin-right: 0.25rem; }
+    .grid-wrap { position: relative; display: inline-block; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 4px;
+      padding: 8px;
+      background: rgba(0,0,0,0.25);
+      border-radius: 12px;
+    }
+    .cell {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--dot);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      cursor: default;
+      transition: background 0.2s, transform 0.15s;
+      position: relative;
+    }
+    .quest-page .cell.setup-obstacle { cursor: default; }
+    .cell.start { box-shadow: 0 0 0 3px #9ece6a; }
+    .cell.goal { box-shadow: 0 0 0 3px #f7768e; }
+    .cell.north { background: #3d59a1 !important; }
+    .cell.south { background: #c53b53 !important; }
+    .cell.east  { background: #e0af68 !important; }
+    .cell.west  { background: #bb9af7 !important; }
+    .obstacle-layer {
+      position: absolute;
+      pointer-events: none;
+      left: 8px;
+      top: 8px;
+      width: calc(10 * 36px + 9 * 4px);
+      height: calc(10 * 36px + 9 * 4px);
+      z-index: 1;
+    }
+    .obstacle-region {
+      position: absolute;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    .obstacle-region.emoji-only {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      background: rgba(0,0,0,0.35);
+    }
+    .character-layer {
+      position: absolute;
+      pointer-events: none;
+      left: 8px;
+      top: 8px;
+      width: calc(10 * 36px + 9 * 4px);
+      height: calc(10 * 36px + 9 * 4px);
+    }
+    .character {
+      position: absolute;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      transition: left 0.35s ease-in-out, top 0.35s ease-in-out;
+      z-index: 2;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+    }
+    .character.dance { animation: dance 0.5s ease-in-out infinite; }
+    @keyframes dance {
+      0%, 100% { transform: rotate(-8deg) scale(1); }
+      50% { transform: rotate(8deg) scale(1.1); }
+    }
+    .hint { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
+    .instruction-line-wrap { margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem; }
+    .instruction-line-wrap input {
+      flex: 1;
+      padding: 0.5rem;
+      border-radius: 8px;
+      border: 1px solid #3b4261;
+      background: #1a1b26;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    .instruction-line-remove {
+      width: 28px; height: 28px; flex-shrink: 0; padding: 0; margin: 0;
+      border-radius: 6px; border: 1px solid #3b4261; background: #24283b; color: var(--muted);
+      font-size: 1.1rem; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .instruction-line-remove:hover { background: #414868; color: #f7768e; }
+    .instruction-line-remove:disabled, .instruction-line-remove[hidden] { visibility: hidden; pointer-events: none; }
+    .dir-badge {
+      width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem; font-weight: bold; color: #1a1b26;
+    }
+    .dir-n { background: #3d59a1; color: #fff; }
+    .dir-s { background: #c53b53; color: #fff; }
+    .dir-e { background: #e0af68; }
+    .dir-w { background: #bb9af7; }
+    .btn {
+      padding: 0.6rem 1rem;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .btn-secondary { background: #565f89; color: #fff; }
+    .btn-secondary:hover { background: #6c7499; }
+    .btn-go { background: #9ece6a; color: #1a1b26; font-size: 1.1rem; padding: 0.75rem 1.5rem; }
+    .mode-badge {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+      background: #bb9af7;
+      color: #1a1b26;
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 1rem;
+    }
+    .overlay-card {
+      background: var(--panel);
+      padding: 2rem;
+      border-radius: 16px;
+      text-align: center;
+      max-width: 360px;
+      border: 2px solid #3b4261;
+    }
+    .overlay-card h2 { margin-top: 0; }
+    .overlay-card.success h2 { color: #9ece6a; }
+    .overlay-card.fail h2 { color: #f7768e; }
+    .overlay-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-top: 1rem; }
+    .overlay-actions .btn { margin: 0; }
+    .cell .cell-media {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    @media (max-width: 700px) {
+      .cell { width: 28px; height: 28px; font-size: 0.95rem; }
+      .character { width: 28px; height: 28px; font-size: 1.2rem; }
+      .character-layer, .obstacle-layer {
+        width: calc(10 * 28px + 9 * 4px);
+        height: calc(10 * 28px + 9 * 4px);
+      }
+    }
+  </style>
+</head>
+<body class="quest-page">
+  <p class="nav-home"><a href="index.html">← Home</a></p>
+  <span class="mode-badge">QUEST</span>
+  <h1 id="questHeadline">Griddy Quest</h1>
+  <p class="subtitle" id="questSubtitle">Ten emoji levels — same rules as play mode: one instruction per line (e.g. <code>3 east</code>).</p>
+
+  <div class="layout">
+    <div class="panel" id="questPanel">
+      <h2 id="levelTitle">Level 1</h2>
+      <div class="level-meta" id="levelStory"></div>
+      <div class="level-nav">
+        <span id="levelCounter">1 / 10</span>
+        <button type="button" class="btn btn-secondary" id="prevLevelBtn" style="margin-top:0;">← Prev</button>
+        <button type="button" class="btn btn-secondary" id="nextLevelBtn" style="margin-top:0;">Next →</button>
+      </div>
+      <h2 style="margin-top:0.5rem;">Instructions</h2>
+      <p class="hint">One line per move · no diagonals</p>
+      <div id="instructionLines"></div>
+      <button type="button" class="btn btn-secondary" id="addLineBtn">+ Add line</button>
+      <button type="button" class="btn btn-secondary" id="resetLinesBtn">Reset</button>
+      <button type="button" class="btn btn-go" id="goBtn">GO</button>
+    </div>
+
+    <div class="grid-wrap" id="gridWrap">
+      <div class="grid" id="grid"></div>
+      <div class="obstacle-layer" id="obstacleLayer"></div>
+      <div class="character-layer" id="charLayer">
+        <div class="character" id="character">🐻</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay" style="display: none;">
+    <div class="overlay-card" id="overlayCard">
+      <h2 id="overlayTitle">Success!</h2>
+      <div id="overlayEmoji" style="font-size: 4rem; margin: 1rem 0;">🎉</div>
+      <p id="overlayMsg"></p>
+      <div class="overlay-actions">
+        <button type="button" class="btn btn-go" id="questNextBtn" style="display: none;">Next level</button>
+        <button type="button" class="btn btn-secondary" id="overlayPlayAgainBtn">Try again</button>
+        <a href="index.html" class="btn btn-secondary" style="display:inline-flex;align-items:center;text-decoration:none;">Home</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+(function () {
+  const GRID = 10;
+  const CELL = 36;
+  const GAP = 4;
+
+  const DIRS = { n: [-1, 0], s: [1, 0], e: [0, 1], w: [0, -1] };
+  const DIR_CLASS = { n: 'north', s: 'south', e: 'east', w: 'west' };
+  const DIR_LINE_CLASS = { n: 'dir-n', s: 'dir-s', e: 'dir-e', w: 'dir-w' };
+
+  /** Horizontal line of 1×1 cells from column c0 to c1 inclusive on row r */
+  function segH(r, c0, c1) {
+    const a = Math.min(c0, c1), b = Math.max(c0, c1);
+    const o = [];
+    for (let c = a; c <= b; c++) o.push({ r, c, rows: 1, cols: 1 });
+    return o;
+  }
+  /** Vertical line of 1×1 cells from row r0 to r1 inclusive on column c */
+  function segV(c, r0, r1) {
+    const a = Math.min(r0, r1), b = Math.max(r0, r1);
+    const o = [];
+    for (let r = a; r <= b; r++) o.push({ r, c, rows: 1, cols: 1 });
+    return o;
+  }
+  function mergeObs() {
+    return [].concat.apply([], arguments);
+  }
+
+  const LEVELS = [
+    {
+      title: 'No straight shot',
+      story: '🐭 traps block your first column climb — go east, then find a lane to 🧀.',
+      char: '🐭', goalEmoji: '🧀', obstacle: '🪤',
+      start: { r: 9, c: 0 }, goal: { r: 0, c: 9 },
+      obstacles: mergeObs(
+        segV(0, 5, 8),
+        segH(0, 0, 7)
+      )
+    },
+    {
+      title: 'Corner squeeze',
+      story: '🐭 the long edge and the top row are trapped — weave to the cheese.',
+      char: '🐭', goalEmoji: '🧀', obstacle: '🪤',
+      start: { r: 9, c: 9 }, goal: { r: 0, c: 0 },
+      obstacles: mergeObs(
+        segH(9, 0, 8),
+        segV(9, 1, 7),
+        segH(0, 1, 9)
+      )
+    },
+    {
+      title: 'Bee gate',
+      story: '🐻 a bee wall crosses the board with one door — then another wall blocks the easy finish.',
+      char: '🐻', goalEmoji: '🍯', obstacle: '🐝',
+      start: { r: 9, c: 0 }, goal: { r: 0, c: 9 },
+      obstacles: mergeObs(
+        [0, 1, 2, 3, 5, 6, 7, 8, 9].map(c => ({ r: 5, c, rows: 1, cols: 1 })),
+        segH(0, 0, 7),
+        segV(9, 3, 7)
+      )
+    },
+    {
+      title: 'Double bend',
+      story: '🐻 vertical and horizontal bee bands — you cannot rush in one direction.',
+      char: '🐻', goalEmoji: '🍯', obstacle: '🐝',
+      start: { r: 0, c: 0 }, goal: { r: 9, c: 9 },
+      obstacles: mergeObs(
+        [0, 1, 2, 4, 5, 6, 7, 8, 9].map(c => ({ r: 4, c, rows: 1, cols: 1 })),
+        segV(8, 1, 8),
+        segH(9, 0, 7)
+      )
+    },
+    {
+      title: 'Zigzag hive',
+      story: '🐻 offset walls leave narrow slots — plan several turns.',
+      char: '🐻', goalEmoji: '🍯', obstacle: '🐝',
+      start: { r: 9, c: 9 }, goal: { r: 0, c: 0 },
+      obstacles: mergeObs(
+        [0, 1, 2, 3, 5, 6, 7, 8, 9].map(c => ({ r: 3, c, rows: 1, cols: 1 })),
+        [0, 1, 2, 3, 4, 6, 7, 8, 9].map(c => ({ r: 6, c, rows: 1, cols: 1 })),
+        segV(0, 4, 8),
+        segV(9, 1, 5)
+      )
+    },
+    {
+      title: 'Meteor belts',
+      story: '🚀 cross two ☄️ belts with staggered gaps — no single highway.',
+      char: '🚀', goalEmoji: '🌙', obstacle: '☄️',
+      start: { r: 9, c: 0 }, goal: { r: 0, c: 9 },
+      obstacles: mergeObs(
+        [0, 1, 2, 3, 5, 6, 7, 8, 9].map(c => ({ r: 6, c, rows: 1, cols: 1 })),
+        [0, 1, 3, 4, 5, 6, 7, 8, 9].map(c => ({ r: 3, c, rows: 1, cols: 1 })),
+        segV(4, 7, 8),
+        segH(8, 1, 6)
+      )
+    },
+    {
+      title: 'Forest bands',
+      story: '🦊 parallel 🌲 bands and a guarded column — serpentine route to 🍇.',
+      char: '🦊', goalEmoji: '🍇', obstacle: '🌲',
+      start: { r: 9, c: 9 }, goal: { r: 0, c: 0 },
+      obstacles: mergeObs(
+        [0, 1, 2, 3, 4, 6, 7, 8, 9].map(c => ({ r: 5, c, rows: 1, cols: 1 })),
+        [0, 1, 2, 3, 5, 6, 7, 8, 9].map(c => ({ r: 2, c, rows: 1, cols: 1 })),
+        segV(9, 2, 7),
+        segH(0, 1, 8),
+        [{ r: 8, c: 0 }, { r: 7, c: 8 }]
+      )
+    },
+    {
+      title: 'Crate maze',
+      story: '🤖 the direct column to 🎯 is boxed in — slide around the 📦 perimeter.',
+      char: '🤖', goalEmoji: '🎯', obstacle: '📦',
+      start: { r: 9, c: 4 }, goal: { r: 0, c: 4 },
+      obstacles: mergeObs(
+        [2, 3, 4, 5, 6, 7].map(r => ({ r, c: 4, rows: 1, cols: 1 })),
+        segH(4, 2, 6),
+        segH(5, 2, 6),
+        segV(2, 3, 7),
+        segV(6, 3, 7),
+        [{ r: 1, c: 6 }, { r: 8, c: 2 }]
+      )
+    },
+    {
+      title: 'Reef channels',
+      story: '🐙 tight 🪸 channels — thread between blocks to reach the 🦪.',
+      char: '🐙', goalEmoji: '🦪', obstacle: '🪸',
+      start: { r: 0, c: 9 }, goal: { r: 9, c: 0 },
+      obstacles: mergeObs(
+        [{ r: 4, c: 3, rows: 1, cols: 5 }],
+        [{ r: 6, c: 4, rows: 1, cols: 4 }],
+        segV(1, 2, 6),
+        segH(2, 5, 8),
+        segV(8, 3, 8),
+        [{ r: 1, c: 7 }, { r: 8, c: 2 }, { r: 3, c: 1 }]
+      )
+    },
+    {
+      title: 'The gauntlet',
+      story: '🐻 three bee rows with different gaps plus side blocks — longest detours.',
+      char: '🐻', goalEmoji: '🍯', obstacle: '🐝',
+      start: { r: 9, c: 0 }, goal: { r: 0, c: 9 },
+      obstacles: mergeObs(
+        [0, 1, 2, 3, 4, 6, 7, 8, 9].map(c => ({ r: 3, c, rows: 1, cols: 1 })),
+        [0, 1, 2, 3, 5, 6, 7, 8, 9].map(c => ({ r: 6, c, rows: 1, cols: 1 })),
+        [1, 2, 3, 4, 5, 7, 8, 9].map(c => ({ r: 8, c, rows: 1, cols: 1 })),
+        segV(0, 4, 8),
+        [{ r: 5, c: 5 }, { r: 4, c: 7 }, { r: 7, c: 2 }, { r: 1, c: 3 }]
+      )
+    }
+  ];
+
+  const state = {
+    questIndex: 0,
+    mode: 'quest',
+    start: { r: 0, c: 0 },
+    goal: { r: 9, c: 9 },
+    obstacleRegions: [],
+    obstacleEmoji: '🐝',
+    charEmoji: '🐻',
+    goalEmoji: '🍯',
+    charImage: null,
+    goalImage: null,
+    placeMode: 'start',
+    obstacleAnchor: null,
+    pendingObstacleImage: null
+  };
+
+  const el = {
+    grid: document.getElementById('grid'),
+    charLayer: document.getElementById('charLayer'),
+    character: document.getElementById('character'),
+    goBtn: document.getElementById('goBtn'),
+    addLineBtn: document.getElementById('addLineBtn'),
+    resetLinesBtn: document.getElementById('resetLinesBtn'),
+    instructionLines: document.getElementById('instructionLines'),
+    obstacleLayer: document.getElementById('obstacleLayer'),
+    overlay: document.getElementById('overlay'),
+    overlayCard: document.getElementById('overlayCard'),
+    overlayTitle: document.getElementById('overlayTitle'),
+    overlayMsg: document.getElementById('overlayMsg'),
+    overlayEmoji: document.getElementById('overlayEmoji'),
+    overlayPlayAgainBtn: document.getElementById('overlayPlayAgainBtn'),
+    questNextBtn: document.getElementById('questNextBtn'),
+    levelTitle: document.getElementById('levelTitle'),
+    levelStory: document.getElementById('levelStory'),
+    levelCounter: document.getElementById('levelCounter'),
+    prevLevelBtn: document.getElementById('prevLevelBtn'),
+    nextLevelBtn: document.getElementById('nextLevelBtn')
+  };
+
+  function cellSize() {
+    const first = el.grid.querySelector('.cell');
+    if (!first) return CELL;
+    return first.getBoundingClientRect().width;
+  }
+
+  function gapSize() {
+    const cs = getComputedStyle(el.grid);
+    const g = cs.gap || cs.columnGap;
+    const n = parseInt(g, 10);
+    return isNaN(n) ? GAP : n;
+  }
+
+  function positionCharacter(r, c, instant) {
+    const size = cellSize();
+    const gap = gapSize();
+    const step = size + gap;
+    el.character.style.transition = instant ? 'none' : '';
+    el.character.style.left = (c * step) + 'px';
+    el.character.style.top = (r * step) + 'px';
+    if (instant) requestAnimationFrame(() => { el.character.style.transition = ''; });
+  }
+
+  function setCellMedia(div, emoji) {
+    div.textContent = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'cell-media';
+    wrap.textContent = emoji || '';
+    div.appendChild(wrap);
+  }
+
+  function isValidRegion(reg) {
+    if (!reg || typeof reg.r !== 'number' || typeof reg.c !== 'number' || typeof reg.rows !== 'number' || typeof reg.cols !== 'number') return false;
+    if (reg.r < 0 || reg.c < 0 || reg.rows < 1 || reg.cols < 1) return false;
+    if (reg.r + reg.rows > GRID || reg.c + reg.cols > GRID) return false;
+    return true;
+  }
+
+  function regionContains(reg, r, c) {
+    return isValidRegion(reg) && r >= reg.r && r < reg.r + reg.rows && c >= reg.c && c < reg.c + reg.cols;
+  }
+
+  function isBlocked(r, c) {
+    return state.obstacleRegions.some(reg => regionContains(reg, r, c));
+  }
+
+  function buildObstacleLayer() {
+    if (!el.obstacleLayer) return;
+    el.obstacleLayer.innerHTML = '';
+    const size = cellSize();
+    const gap = gapSize();
+    const step = size + gap;
+    state.obstacleRegions.filter(isValidRegion).forEach(reg => {
+      const div = document.createElement('div');
+      div.className = 'obstacle-region emoji-only';
+      const w = reg.cols * size + (reg.cols - 1) * gap;
+      const h = reg.rows * size + (reg.rows - 1) * gap;
+      div.style.left = (reg.c * step) + 'px';
+      div.style.top = (reg.r * step) + 'px';
+      div.style.width = w + 'px';
+      div.style.height = h + 'px';
+      div.textContent = reg.emoji || state.obstacleEmoji;
+      el.obstacleLayer.appendChild(div);
+    });
+  }
+
+  function buildGrid() {
+    el.grid.innerHTML = '';
+    for (let r = 0; r < GRID; r++) {
+      for (let c = 0; c < GRID; c++) {
+        const div = document.createElement('div');
+        div.className = 'cell';
+        div.dataset.r = r;
+        div.dataset.c = c;
+        if (isBlocked(r, c)) div.classList.add('setup-obstacle');
+        if (r === state.start.r && c === state.start.c) div.classList.add('start');
+        if (r === state.goal.r && c === state.goal.c) {
+          div.classList.add('goal');
+          if (!isBlocked(r, c)) setCellMedia(div, state.goalEmoji);
+        }
+        el.grid.appendChild(div);
+      }
+    }
+    buildObstacleLayer();
+    syncCharacterToStart();
+  }
+
+  function renderCharacterMedia() {
+    el.character.textContent = state.charEmoji;
+  }
+
+  function syncCharacterToStart() {
+    renderCharacterMedia();
+    positionCharacter(state.start.r, state.start.c, true);
+  }
+
+  function parseInstruction(line) {
+    const s = line.trim().toLowerCase();
+    if (!s) return null;
+    const m = s.match(/^(\d+)\s*(?:dots?\s*)?(north|south|east|west|n|e|s|w)\b/);
+    if (!m) return null;
+    const n = parseInt(m[1], 10);
+    if (n < 1 || n > 20) return null;
+    let d = m[2];
+    if (d === 'north' || d === 'n') d = 'n';
+    else if (d === 'south' || d === 's') d = 's';
+    else if (d === 'east' || d === 'e') d = 'e';
+    else if (d === 'west' || d === 'w') d = 'w';
+    else return null;
+    return { steps: n, dir: d };
+  }
+
+  function detectDirFromLine(line) {
+    const s = line.trim().toLowerCase();
+    if (/north|\bn\b/.test(s) && !/south/.test(s)) return 'n';
+    if (/south|\bs\b/.test(s)) return 's';
+    if (/east|\be\b/.test(s)) return 'e';
+    if (/west|\bw\b/.test(s)) return 'w';
+    return null;
+  }
+
+  function expandInstructions(text) {
+    const lines = text.split('\n');
+    const moves = [];
+    for (const line of lines) {
+      const p = parseInstruction(line);
+      if (p) {
+        for (let i = 0; i < p.steps; i++) moves.push(p.dir);
+      }
+    }
+    return moves;
+  }
+
+  function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
+
+  async function runMoves(moves) {
+    let r = state.start.r, c = state.start.c;
+    const goalR = state.goal.r, goalC = state.goal.c;
+
+    el.grid.querySelectorAll('.cell').forEach(cell => {
+      cell.classList.remove('north', 'south', 'east', 'west');
+    });
+
+    for (const dir of moves) {
+      const [dr, dc] = DIRS[dir];
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nr >= GRID || nc < 0 || nc >= GRID) {
+        syncCharacterToStart();
+        return { ok: false, reason: 'out' };
+      }
+      if (isBlocked(nr, nc)) {
+        positionCharacter(nr, nc, false);
+        await sleep(380);
+        syncCharacterToStart();
+        return { ok: false, reason: 'obstacle' };
+      }
+      r = nr; c = nc;
+      positionCharacter(r, c, false);
+      const prevR = r - dr, prevC = c - dc;
+      const prevCell = el.grid.querySelector('.cell[data-r="' + prevR + '"][data-c="' + prevC + '"]');
+      if (prevCell) prevCell.classList.add(DIR_CLASS[dir]);
+      await sleep(400);
+    }
+
+    if (r === goalR && c === goalC) return { ok: true };
+    syncCharacterToStart();
+    return { ok: false, reason: 'notgoal' };
+  }
+
+  function hideOverlay() {
+    el.overlay.style.display = 'none';
+    el.character.classList.remove('dance');
+  }
+
+  function showQuestOverlay(success, msg, showNext) {
+    el.overlayCard.classList.remove('success', 'fail');
+    el.overlayCard.classList.add(success ? 'success' : 'fail');
+    el.overlayTitle.textContent = success ? 'Level clear!' : 'Not quite';
+    el.overlayMsg.textContent = msg || '';
+    el.overlayEmoji.textContent = success ? state.charEmoji : '💥';
+    el.character.classList.toggle('dance', success);
+    el.questNextBtn.style.display = showNext ? 'inline-block' : 'none';
+    el.overlay.style.display = 'flex';
+  }
+
+  function playAgain() {
+    hideOverlay();
+    el.grid.querySelectorAll('.cell').forEach(cell => {
+      cell.classList.remove('north', 'south', 'east', 'west');
+    });
+    syncCharacterToStart();
+  }
+
+  function obsToRegions(list) {
+    return list.map(o => ({
+      r: o.r,
+      c: o.c,
+      rows: o.rows != null ? o.rows : 1,
+      cols: o.cols != null ? o.cols : 1,
+      image: null,
+      emoji: null
+    })).filter(isValidRegion);
+  }
+
+  function loadLevel(idx) {
+    const clamped = Math.max(0, Math.min(LEVELS.length - 1, idx));
+    state.questIndex = clamped;
+    const L = LEVELS[clamped];
+    state.start = { r: L.start.r, c: L.start.c };
+    state.goal = { r: L.goal.r, c: L.goal.c };
+    state.charEmoji = L.char;
+    state.goalEmoji = L.goalEmoji;
+    state.obstacleEmoji = L.obstacle;
+    state.obstacleRegions = obsToRegions(L.obstacles || []);
+    state.obstacleAnchor = null;
+    state.pendingObstacleImage = null;
+    el.levelTitle.textContent = 'Level ' + (clamped + 1) + ' · ' + L.title;
+    el.levelStory.textContent = L.story;
+    el.levelCounter.textContent = (clamped + 1) + ' / ' + LEVELS.length;
+    el.prevLevelBtn.disabled = clamped === 0;
+    el.nextLevelBtn.disabled = clamped === LEVELS.length - 1;
+    resetInstructionLines();
+    buildGrid();
+    hideOverlay();
+  }
+
+  function ensureInstructionLines() {
+    if (el.instructionLines.children.length === 0) addInstructionLine('');
+    updateLineColors();
+    updateInstructionRemoveButtons();
+  }
+
+  function updateInstructionRemoveButtons() {
+    const wraps = el.instructionLines.querySelectorAll('.instruction-line-wrap');
+    const showRemove = wraps.length > 1;
+    wraps.forEach(wrap => {
+      const btn = wrap.querySelector('.instruction-line-remove');
+      if (!btn) return;
+      btn.disabled = !showRemove;
+      btn.toggleAttribute('hidden', !showRemove);
+    });
+  }
+
+  function resetInstructionLines() {
+    el.instructionLines.innerHTML = '';
+    addInstructionLine('');
+  }
+
+  function addInstructionLine(value) {
+    const wrap = document.createElement('div');
+    wrap.className = 'instruction-line-wrap';
+    const badge = document.createElement('span');
+    badge.className = 'dir-badge';
+    badge.textContent = '·';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = '3 east';
+    input.value = value;
+    input.addEventListener('input', updateLineColors);
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'instruction-line-remove';
+    removeBtn.setAttribute('aria-label', 'Remove line');
+    removeBtn.title = 'Remove line';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', () => {
+      if (el.instructionLines.querySelectorAll('.instruction-line-wrap').length <= 1) return;
+      wrap.remove();
+      updateInstructionRemoveButtons();
+      updateLineColors();
+    });
+    wrap.appendChild(badge);
+    wrap.appendChild(input);
+    wrap.appendChild(removeBtn);
+    el.instructionLines.appendChild(wrap);
+    updateLineColors();
+    updateInstructionRemoveButtons();
+  }
+
+  function updateLineColors() {
+    el.instructionLines.querySelectorAll('.instruction-line-wrap').forEach(wrap => {
+      const input = wrap.querySelector('input');
+      const badge = wrap.querySelector('.dir-badge');
+      const d = detectDirFromLine(input.value);
+      badge.className = 'dir-badge ' + (d ? DIR_LINE_CLASS[d] : '');
+      badge.textContent = d ? d.toUpperCase() : '·';
+    });
+  }
+
+  function getInstructionsText() {
+    const lines = [];
+    el.instructionLines.querySelectorAll('input').forEach(inp => lines.push(inp.value));
+    return lines.join('\n');
+  }
+
+  el.addLineBtn.addEventListener('click', () => addInstructionLine(''));
+  el.resetLinesBtn.addEventListener('click', resetInstructionLines);
+
+  el.goBtn.addEventListener('click', async () => {
+    const text = getInstructionsText();
+    const moves = expandInstructions(text);
+    if (moves.length === 0) {
+      showQuestOverlay(false, 'Add a line like 2 east', false);
+      return;
+    }
+    el.goBtn.disabled = true;
+    const result = await runMoves(moves);
+    el.goBtn.disabled = false;
+    if (result.ok) {
+      const hasNext = state.questIndex < LEVELS.length - 1;
+      const msg = hasNext ? 'Ready for the next challenge?' : 'You finished all 10 quest levels!';
+      showQuestOverlay(true, msg, hasNext);
+    } else if (result.reason === 'obstacle') {
+      showQuestOverlay(false, 'Ran into an obstacle.', false);
+    } else if (result.reason === 'out') {
+      showQuestOverlay(false, 'That path leaves the grid.', false);
+    } else {
+      showQuestOverlay(false, 'Reach the goal exactly.', false);
+    }
+  });
+
+  el.overlayPlayAgainBtn.addEventListener('click', playAgain);
+  el.questNextBtn.addEventListener('click', () => {
+    hideOverlay();
+    loadLevel(state.questIndex + 1);
+  });
+  el.prevLevelBtn.addEventListener('click', () => loadLevel(state.questIndex - 1));
+  el.nextLevelBtn.addEventListener('click', () => loadLevel(state.questIndex + 1));
+
+  loadLevel(0);
+  ensureInstructionLines();
+
+  window.addEventListener('resize', () => {
+    buildObstacleLayer();
+    syncCharacterToStart();
+  });
+})();
+  </script>
+</body>
+</html>
