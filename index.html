@@ -175,6 +175,14 @@
     }
     .instruction-line-wrap { margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem; }
     .instruction-line-wrap input { flex: 1; }
+    .instruction-line-remove {
+      width: 28px; height: 28px; flex-shrink: 0; padding: 0; margin: 0;
+      border-radius: 6px; border: 1px solid #3b4261; background: #24283b; color: var(--muted);
+      font-size: 1.1rem; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .instruction-line-remove:hover { background: #414868; color: #f7768e; }
+    .instruction-line-remove:disabled, .instruction-line-remove[hidden] { visibility: hidden; pointer-events: none; }
     .dir-badge {
       width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
@@ -432,6 +440,7 @@
         <p class="hint">One line per move · e.g. <code>3 east</code></p>
         <div id="instructionLines"></div>
         <button type="button" class="btn btn-secondary" id="addLineBtn">+ Add line</button>
+        <button type="button" class="btn btn-secondary" id="resetLinesBtn">Reset</button>
         <button type="button" class="btn btn-go" id="goBtn">GO</button>
         <button type="button" class="btn btn-secondary" id="backToSetupBtn">Back to setup</button>
       </div>
@@ -515,6 +524,7 @@
     goBtn: document.getElementById('goBtn'),
     backToSetupBtn: document.getElementById('backToSetupBtn'),
     addLineBtn: document.getElementById('addLineBtn'),
+    resetLinesBtn: document.getElementById('resetLinesBtn'),
     instructionLines: document.getElementById('instructionLines'),
     overlay: document.getElementById('overlay'),
     overlayCard: document.getElementById('overlayCard'),
@@ -883,6 +893,23 @@
   function ensureInstructionLines() {
     if (el.instructionLines.children.length === 0) addInstructionLine('');
     updateLineColors();
+    updateInstructionRemoveButtons();
+  }
+
+  function updateInstructionRemoveButtons() {
+    const wraps = el.instructionLines.querySelectorAll('.instruction-line-wrap');
+    const showRemove = wraps.length > 1;
+    wraps.forEach(wrap => {
+      const btn = wrap.querySelector('.instruction-line-remove');
+      if (!btn) return;
+      btn.disabled = !showRemove;
+      btn.toggleAttribute('hidden', !showRemove);
+    });
+  }
+
+  function resetInstructionLines() {
+    el.instructionLines.innerHTML = '';
+    addInstructionLine('');
   }
 
   function addInstructionLine(value) {
@@ -896,10 +923,24 @@
     input.placeholder = '3 dots east';
     input.value = value;
     input.addEventListener('input', updateLineColors);
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'instruction-line-remove';
+    removeBtn.setAttribute('aria-label', 'Remove line');
+    removeBtn.title = 'Remove line';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', () => {
+      if (el.instructionLines.querySelectorAll('.instruction-line-wrap').length <= 1) return;
+      wrap.remove();
+      updateInstructionRemoveButtons();
+      updateLineColors();
+    });
     wrap.appendChild(badge);
     wrap.appendChild(input);
+    wrap.appendChild(removeBtn);
     el.instructionLines.appendChild(wrap);
     updateLineColors();
+    updateInstructionRemoveButtons();
   }
 
   function updateLineColors() {
@@ -1259,6 +1300,7 @@
   if (el.overlayPlayAgainBtn) el.overlayPlayAgainBtn.addEventListener('click', playAgain);
 
   el.addLineBtn.addEventListener('click', () => addInstructionLine(''));
+  if (el.resetLinesBtn) el.resetLinesBtn.addEventListener('click', resetInstructionLines);
 
   el.goBtn.addEventListener('click', async () => {
     const text = getInstructionsText();
