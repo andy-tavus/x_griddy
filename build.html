@@ -356,7 +356,7 @@
         <div id="panelDetails" class="tab-panel active" role="tabpanel">
           <div class="row">
             <label>Challenge title</label>
-            <input type="text" id="titleInput" placeholder="My maze" value="Griddy" />
+            <input type="text" id="titleInput" placeholder="My maze" value="Griddy" maxlength="48" autocomplete="off" />
           </div>
           <div class="row">
             <label>Background</label>
@@ -480,6 +480,7 @@
   const CELL = 36; // match CSS; JS uses same for position math
   const GAP = 4;
   const IMAGE_MAX_SIDE = 512; // downscale uploads to keep memory sane
+  const TITLE_MAX_LEN = 48;
 
   // [dr, dc]: row increases downward, column increases rightward
   const DIRS = { n: [-1, 0], s: [1, 0], e: [0, 1], w: [0, -1] };
@@ -1285,8 +1286,17 @@
     }
   }
 
+  function clampTitleValue() {
+    let v = el.titleInput.value;
+    if (v.length > TITLE_MAX_LEN) {
+      v = v.slice(0, TITLE_MAX_LEN);
+      el.titleInput.value = v;
+    }
+    return v;
+  }
+
   el.titleInput.addEventListener('input', () => {
-    state.title = el.titleInput.value || 'Griddy';
+    state.title = clampTitleValue() || 'Griddy';
     el.challengeTitle.textContent = state.title;
   });
   el.bgColorInput.addEventListener('input', () => {
@@ -1295,7 +1305,7 @@
   });
 
   el.doneSetupBtn.addEventListener('click', () => {
-    state.title = el.titleInput.value || 'Griddy';
+    state.title = clampTitleValue() || 'Griddy';
     el.challengeTitle.textContent = state.title;
     enterPlay();
   });
